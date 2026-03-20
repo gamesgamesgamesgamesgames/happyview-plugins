@@ -1,0 +1,17 @@
+{
+  "extends": "semantic-release-monorepo",
+  "branches": ["main"],
+  "tagFormat": "itch-v${version}",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/exec", {
+      "prepareCmd": "cargo build --release --target wasm32-unknown-unknown -p itch-plugin"
+    }],
+    ["@semantic-release/github", {
+      "assets": [
+        {"path": "../../target/wasm32-unknown-unknown/release/itch_plugin.wasm", "name": "itch-${nextRelease.version}.wasm", "label": "itch.io Plugin (${nextRelease.version})"}
+      ]
+    }]
+  ]
+}

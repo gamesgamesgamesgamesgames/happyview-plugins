@@ -1,9 +1,10 @@
-name: Build and Release
+name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -17,34 +18,37 @@ jobs:
       - name: Build all plugins
         run: cargo build --release --target wasm32-unknown-unknown
 
-      - name: Prepare release artifacts
-        run: |
-          mkdir -p dist
-          for plugin in plugins/*/; do
-            name=$(basename "$plugin")
-            # Convert kebab-case to snake_case for the binary name
-            binary_name=$(echo "${name}-plugin" | tr '-' '_')
-            cp "target/wasm32-unknown-unknown/release/${binary_name}.wasm" "dist/${name}.wasm"
-          done
-          ls -la dist/
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/*.wasm
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Also build on PRs to catch errors early
-  check:
-    if: github.event_name == 'pull_request'
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build]
     runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    strategy:
+      matrix:
+        plugin: [steam, xbox, itch]
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install modules
+        run: npm install
 
       - name: Add WASM target
         run: rustup target add wasm32-unknown-unknown
 
-      - name: Build all plugins
-        run: cargo build --release --target wasm32-unknown-unknown
+      - name: Release ${{ matrix.plugin }}
+        working-directory: plugins/${{ matrix.plugin }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --yes semantic-release

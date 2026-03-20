@@ -1,0 +1,17 @@
+{
+  "extends": "semantic-release-monorepo",
+  "branches": ["main"],
+  "tagFormat": "xbox-v${version}",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/exec", {
+      "prepareCmd": "cargo build --release --target wasm32-unknown-unknown -p xbox-plugin"
+    }],
+    ["@semantic-release/github", {
+      "assets": [
+        {"path": "../../target/wasm32-unknown-unknown/release/xbox_plugin.wasm", "name": "xbox-${nextRelease.version}.wasm", "label": "Xbox Plugin (${nextRelease.version})"}
+      ]
+    }]
+  ]
+}

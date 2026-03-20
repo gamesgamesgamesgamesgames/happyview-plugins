@@ -1,0 +1,17 @@
+{
+  "extends": "semantic-release-monorepo",
+  "branches": ["main"],
+  "tagFormat": "steam-v${version}",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/exec", {
+      "prepareCmd": "cargo build --release --target wasm32-unknown-unknown -p steam-plugin"
+    }],
+    ["@semantic-release/github", {
+      "assets": [
+        {"path": "../../target/wasm32-unknown-unknown/release/steam_plugin.wasm", "name": "steam-${nextRelease.version}.wasm", "label": "Steam Plugin (${nextRelease.version})"}
+      ]
+    }]
+  ]
+}
