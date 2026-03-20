@@ -4,13 +4,11 @@ WASM plugins for [HappyView](https://github.com/gamesgamesgamesgamesgames/happyv
 
 ## Available Plugins
 
-| Plugin        | Platform            | Auth Type | Required Secrets             |
-| ------------- | ------------------- | --------- | ---------------------------- |
-| `steam`       | Steam               | OpenID    | `API_KEY`                    |
-| `xbox`        | Xbox/Microsoft      | OAuth2    | `CLIENT_ID`, `CLIENT_SECRET` |
-| `gog`         | GOG Galaxy          | OAuth2    | `CLIENT_ID`, `CLIENT_SECRET` |
-| `playstation` | PlayStation Network | OAuth2    | None (public client)         |
-| `itch`        | itch.io             | OAuth2    | `CLIENT_ID`, `CLIENT_SECRET` |
+| Plugin  | Platform       | Auth Type | Required Secrets             |
+| ------- | -------------- | --------- | ---------------------------- |
+| `steam` | Steam          | OpenID    | `API_KEY`                    |
+| `xbox`  | Xbox/Microsoft | OAuth2    | `CLIENT_ID`, `CLIENT_SECRET` |
+| `itch`  | itch.io        | OAuth2    | `CLIENT_ID`, `CLIENT_SECRET` |
 
 ## Installation
 
@@ -43,10 +41,6 @@ PLUGIN_STEAM_API_KEY=your_steam_api_key
 # Xbox
 PLUGIN_XBOX_CLIENT_ID=your_azure_client_id
 PLUGIN_XBOX_CLIENT_SECRET=your_azure_client_secret
-
-# GOG (requires developer access)
-PLUGIN_GOG_CLIENT_ID=your_gog_client_id
-PLUGIN_GOG_CLIENT_SECRET=your_gog_client_secret
 
 # itch.io
 PLUGIN_ITCH_CLIENT_ID=your_itch_client_id

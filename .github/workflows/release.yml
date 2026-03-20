@@ -7,14 +7,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-action@stable
-        with:
-          targets: wasm32-unknown-unknown
+      - name: Add WASM target
+        run: rustup target add wasm32-unknown-unknown
 
       - name: Build all plugins
         run: cargo build --release --target wasm32-unknown-unknown
@@ -41,14 +39,12 @@ jobs:
   # Also build on PRs to catch errors early
   check:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-action@stable
-        with:
-          targets: wasm32-unknown-unknown
+      - name: Add WASM target
+        run: rustup target add wasm32-unknown-unknown
 
       - name: Build all plugins
         run: cargo build --release --target wasm32-unknown-unknown
