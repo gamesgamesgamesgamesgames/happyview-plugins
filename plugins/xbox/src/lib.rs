@@ -154,32 +154,6 @@ fn get_secret(name: &str) -> Option<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn http_get(url: &str) -> Result<String, String> {
-    let req = serde_json::json!({
-        "method": "GET",
-        "url": url,
-        "headers": [],
-        "body": null
-    });
-    let req_str = serde_json::to_string(&req).map_err(|e| e.to_string())?;
-    let packed = unsafe { host_http_request(req_str.as_ptr() as i32, req_str.len() as i32) };
-    let bytes = read_host_response(packed).ok_or("No response")?;
-    let resp: HostHttpResponse =
-        serde_json::from_slice(&bytes).map_err(|e| format!("Parse error: {}", e))?;
-
-    match resp {
-        HostHttpResponse::Ok { ok } => {
-            if ok.status >= 200 && ok.status < 300 {
-                String::from_utf8(ok.body).map_err(|_| "Invalid UTF-8".to_string())
-            } else {
-                Err(format!("HTTP {}", ok.status))
-            }
-        }
-        HostHttpResponse::Error { error } => Err(error.message),
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 fn http_post(url: &str, body: &str, content_type: &str) -> Result<String, String> {
     let req = serde_json::json!({
         "method": "POST",
@@ -442,7 +416,6 @@ struct XboxProfileResponse {
 
 #[derive(Deserialize)]
 struct XboxProfileUser {
-    id: String,
     settings: Vec<XboxProfileSetting>,
 }
 
@@ -573,12 +546,24 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
 
         let ms_token_resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to get MS token: {}", e), true),
+            Err(e) => {
+                return return_error(
+                    "TOKEN_ERROR",
+                    &format!("Failed to get MS token: {}", e),
+                    true,
+                )
+            }
         };
 
         let ms_token: MsTokenResponse = match serde_json::from_str(&ms_token_resp) {
             Ok(t) => t,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to parse MS token: {}", e), false),
+            Err(e) => {
+                return return_error(
+                    "TOKEN_ERROR",
+                    &format!("Failed to parse MS token: {}", e),
+                    false,
+                )
+            }
         };
 
         // The MS access token is used as the "access_token" for simplicity
@@ -637,12 +622,16 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
 
         let resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true),
+            Err(e) => {
+                return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true)
+            }
         };
 
         let ms_token: MsTokenResponse = match serde_json::from_str(&resp) {
             Ok(t) => t,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false),
+            Err(e) => {
+                return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false)
+            }
         };
 
         let token_set = TokenSet {
@@ -718,7 +707,10 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
         let profile = ExternalProfile {
             account_id: xuid,
             display_name: Some(display_name.clone()),
-            profile_url: Some(format!("https://www.xbox.com/en-US/play/user/{}", display_name)),
+            profile_url: Some(format!(
+                "https://www.xbox.com/en-US/play/user/{}",
+                display_name
+            )),
             avatar_url,
         };
 
@@ -764,12 +756,10 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
         );
 
         let titles = match http_get_with_auth(&titles_url, &auth_header) {
-            Ok(resp) => {
-                match serde_json::from_str::<TitleHistoryResponse>(&resp) {
-                    Ok(t) => t.titles,
-                    Err(_) => vec![],
-                }
-            }
+            Ok(resp) => match serde_json::from_str::<TitleHistoryResponse>(&resp) {
+                Ok(t) => t.titles,
+                Err(_) => vec![],
+            },
             Err(_) => vec![],
         };
 
@@ -832,10 +822,12 @@ fn get_xbl_token(ms_access_token: &str) -> Result<(String, String), String> {
     let body = serde_json::to_string(&req).map_err(|e| e.to_string())?;
     let resp = http_post(xbl_url, &body, "application/json")?;
 
-    let xbl_resp: XblAuthResponse = serde_json::from_str(&resp)
-        .map_err(|e| format!("Failed to parse XBL response: {}", e))?;
+    let xbl_resp: XblAuthResponse =
+        serde_json::from_str(&resp).map_err(|e| format!("Failed to parse XBL response: {}", e))?;
 
-    let user_hash = xbl_resp.display_claims.xui
+    let user_hash = xbl_resp
+        .display_claims
+        .xui
         .first()
         .map(|u| u.uhs.clone())
         .ok_or("No user hash in XBL response")?;
@@ -859,14 +851,20 @@ fn get_xsts_token(xbl_token: &str) -> Result<(String, String, String), String> {
     let body = serde_json::to_string(&req).map_err(|e| e.to_string())?;
     let resp = http_post(xsts_url, &body, "application/json")?;
 
-    let xsts_resp: XstsAuthResponse = serde_json::from_str(&resp)
-        .map_err(|e| format!("Failed to parse XSTS response: {}", e))?;
+    let xsts_resp: XstsAuthResponse =
+        serde_json::from_str(&resp).map_err(|e| format!("Failed to parse XSTS response: {}", e))?;
 
-    let user_info = xsts_resp.display_claims.xui
+    let user_info = xsts_resp
+        .display_claims
+        .xui
         .first()
         .ok_or("No user info in XSTS response")?;
 
-    Ok((xsts_resp.token, user_info.xid.clone(), user_info.gtg.clone()))
+    Ok((
+        xsts_resp.token,
+        user_info.xid.clone(),
+        user_info.gtg.clone(),
+    ))
 }
 
 // ============================================================================

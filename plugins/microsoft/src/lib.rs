@@ -431,12 +431,20 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
 
         let ms_token_resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to get token: {}", e), true),
+            Err(e) => {
+                return return_error("TOKEN_ERROR", &format!("Failed to get token: {}", e), true)
+            }
         };
 
         let ms_token: MsTokenResponse = match serde_json::from_str(&ms_token_resp) {
             Ok(t) => t,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to parse token: {}", e), false),
+            Err(e) => {
+                return return_error(
+                    "TOKEN_ERROR",
+                    &format!("Failed to parse token: {}", e),
+                    false,
+                )
+            }
         };
 
         let token_set = TokenSet {
@@ -493,12 +501,16 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
 
         let resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true),
+            Err(e) => {
+                return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true)
+            }
         };
 
         let ms_token: MsTokenResponse = match serde_json::from_str(&resp) {
             Ok(t) => t,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false),
+            Err(e) => {
+                return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false)
+            }
         };
 
         let token_set = TokenSet {
@@ -535,9 +547,21 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
         let graph_profile = match http_get_with_auth(profile_url, &input.access_token) {
             Ok(resp) => match serde_json::from_str::<GraphUserProfile>(&resp) {
                 Ok(p) => p,
-                Err(e) => return return_error("PROFILE_ERROR", &format!("Failed to parse profile: {}", e), false),
+                Err(e) => {
+                    return return_error(
+                        "PROFILE_ERROR",
+                        &format!("Failed to parse profile: {}", e),
+                        false,
+                    )
+                }
             },
-            Err(e) => return return_error("PROFILE_ERROR", &format!("Failed to get profile: {}", e), true),
+            Err(e) => {
+                return return_error(
+                    "PROFILE_ERROR",
+                    &format!("Failed to get profile: {}", e),
+                    true,
+                )
+            }
         };
 
         let profile = ExternalProfile {

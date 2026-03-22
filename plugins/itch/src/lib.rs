@@ -294,8 +294,6 @@ struct ItchTokenResponse {
     access_token: String,
     token_type: String,
     #[serde(default)]
-    expires_in: Option<u64>,
-    #[serde(default)]
     refresh_token: Option<String>,
 }
 
@@ -322,21 +320,11 @@ struct ItchOwnedKeysResponse {
 #[derive(Deserialize)]
 struct OwnedKey {
     game: OwnedGame,
-    created_at: Option<String>,
-    #[serde(default)]
-    downloads: i32,
 }
 
 #[derive(Deserialize)]
 struct OwnedGame {
     id: i64,
-    title: String,
-    short_text: Option<String>,
-    cover_url: Option<String>,
-    url: Option<String>,
-    #[serde(rename = "type")]
-    game_type: Option<String>,
-    classification: Option<String>,
 }
 
 // ============================================================================
@@ -448,12 +436,24 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
             "application/x-www-form-urlencoded",
         ) {
             Ok(r) => r,
-            Err(e) => return return_error("TOKEN_ERROR", &format!("Token exchange failed: {}", e), true),
+            Err(e) => {
+                return return_error(
+                    "TOKEN_ERROR",
+                    &format!("Token exchange failed: {}", e),
+                    true,
+                )
+            }
         };
 
         let tokens: ItchTokenResponse = match serde_json::from_str(&token_response) {
             Ok(t) => t,
-            Err(e) => return return_error("INVALID_RESPONSE", &format!("Failed to parse token: {}", e), false),
+            Err(e) => {
+                return return_error(
+                    "INVALID_RESPONSE",
+                    &format!("Failed to parse token: {}", e),
+                    false,
+                )
+            }
         };
 
         let token_set = TokenSet {
@@ -533,7 +533,9 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
 
         let me: ItchMeResponse = match serde_json::from_str(&body) {
             Ok(m) => m,
-            Err(e) => return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false)
+            }
         };
 
         let profile = ExternalProfile {
@@ -573,10 +575,10 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
             Err(e) => return return_error("HTTP_ERROR", &e, true),
         };
 
-        let me: ItchMeResponse = match serde_json::from_str(&me_body) {
-            Ok(m) => m,
-            Err(e) => return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false),
-        };
+        // Validate token by parsing profile response
+        if let Err(e) = serde_json::from_str::<ItchMeResponse>(&me_body) {
+            return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false);
+        }
 
         // Fetch owned games - paginated
         let mut all_games: Vec<OwnedKey> = Vec::new();
