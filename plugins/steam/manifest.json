@@ -5,7 +5,13 @@
   "api_version": "1",
   "icon_url": "https://store.steampowered.com/favicon.ico",
   "auth_type": "openid",
-  "required_secrets": ["API_KEY"],
+  "required_secrets": [
+    {
+      "key": "PLUGIN_STEAM_API_KEY",
+      "name": "Steam Web API Key",
+      "description": "Get your API key at steamcommunity.com/dev/apikey"
+    }
+  ],
   "description": "Import your Steam game library and playtime data.",
   "wasm_file": "steam.wasm"
 }

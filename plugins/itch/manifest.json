@@ -5,7 +5,18 @@
   "api_version": "1",
   "icon_url": "https://itch.io/favicon.ico",
   "auth_type": "oauth2",
-  "required_secrets": ["CLIENT_ID", "CLIENT_SECRET"],
+  "required_secrets": [
+    {
+      "key": "PLUGIN_ITCH_CLIENT_ID",
+      "name": "OAuth Client ID",
+      "description": "From your itch.io OAuth application"
+    },
+    {
+      "key": "PLUGIN_ITCH_CLIENT_SECRET",
+      "name": "OAuth Client Secret",
+      "description": "From your itch.io OAuth application"
+    }
+  ],
   "description": "Import your itch.io game library and purchases.",
   "wasm_file": "itch.wasm"
 }
