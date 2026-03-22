@@ -1,0 +1,15 @@
+[package]
+name = "microsoft-plugin"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[profile.release]
+opt-level = "s"
+lto = true

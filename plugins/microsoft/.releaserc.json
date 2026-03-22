@@ -1,0 +1,17 @@
+{
+  "extends": "semantic-release-monorepo",
+  "branches": ["main"],
+  "tagFormat": "microsoft-v${version}",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/exec", {
+      "prepareCmd": "cargo build --release --target wasm32-unknown-unknown -p microsoft-plugin"
+    }],
+    ["@semantic-release/github", {
+      "assets": [
+        {"path": "../../target/wasm32-unknown-unknown/release/microsoft_plugin.wasm", "name": "microsoft-${nextRelease.version}.wasm", "label": "Microsoft Plugin (${nextRelease.version})"}
+      ]
+    }]
+  ]
+}

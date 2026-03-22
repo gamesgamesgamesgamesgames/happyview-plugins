@@ -4,11 +4,12 @@ WASM plugins for [HappyView](https://github.com/gamesgamesgamesgamesgames/happyv
 
 ## Available Plugins
 
-| Plugin  | Platform       | Auth Type | Required Secrets             |
-| ------- | -------------- | --------- | ---------------------------- |
-| `steam` | Steam          | OpenID    | `API_KEY`                    |
-| `xbox`  | Xbox/Microsoft | OAuth2    | `CLIENT_ID`, `CLIENT_SECRET` |
-| `itch`  | itch.io        | OAuth2    | `CLIENT_ID`, `CLIENT_SECRET` |
+| Plugin      | Platform  | Auth Type | Syncs                    |
+| ----------- | --------- | --------- | ------------------------ |
+| `steam`     | Steam     | OpenID    | Games library            |
+| `xbox`      | Xbox      | OAuth2    | Xbox games, achievements |
+| `microsoft` | Microsoft | OAuth2    | Account linking          |
+| `itch`      | itch.io   | OAuth2    | Games library            |
 
 ## Installation
 
@@ -38,9 +39,13 @@ Each plugin requires environment variables in HappyView with the prefix `PLUGIN_
 # Steam
 PLUGIN_STEAM_API_KEY=your_steam_api_key
 
-# Xbox
+# Xbox (Azure AD app with Xbox Live scopes)
 PLUGIN_XBOX_CLIENT_ID=your_azure_client_id
 PLUGIN_XBOX_CLIENT_SECRET=your_azure_client_secret
+
+# Microsoft (can use same Azure app as Xbox)
+PLUGIN_MICROSOFT_CLIENT_ID=your_azure_client_id
+PLUGIN_MICROSOFT_CLIENT_SECRET=your_azure_client_secret
 
 # itch.io
 PLUGIN_ITCH_CLIENT_ID=your_itch_client_id
