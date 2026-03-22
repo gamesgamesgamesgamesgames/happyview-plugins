@@ -6,7 +6,7 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     ["@semantic-release/exec", {
-      "prepareCmd": "cargo build --release --target wasm32-unknown-unknown -p steam-plugin"
+      "prepareCmd": "cargo build --release --target wasm32-unknown-unknown -p steam-plugin && jq '.version = \"${nextRelease.version}\"' manifest.json > manifest.tmp && mv manifest.tmp manifest.json"
     }],
     ["@semantic-release/github", {
       "assets": [
