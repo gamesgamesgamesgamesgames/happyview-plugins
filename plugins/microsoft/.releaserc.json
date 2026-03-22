@@ -10,7 +10,8 @@
     }],
     ["@semantic-release/github", {
       "assets": [
-        {"path": "../../target/wasm32-unknown-unknown/release/microsoft_plugin.wasm", "name": "microsoft-${nextRelease.version}.wasm", "label": "Microsoft Plugin (${nextRelease.version})"}
+        {"path": "../../target/wasm32-unknown-unknown/release/microsoft_plugin.wasm", "name": "microsoft.wasm", "label": "Microsoft Plugin WASM"},
+        {"path": "manifest.json", "name": "manifest.json", "label": "Plugin Manifest"}
       ]
     }]
   ]

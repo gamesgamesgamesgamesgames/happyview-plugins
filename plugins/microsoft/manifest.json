@@ -1,0 +1,10 @@
+{
+  "id": "microsoft",
+  "name": "Microsoft",
+  "version": "0.1.0",
+  "api_version": "1",
+  "auth_type": "oauth2",
+  "required_secrets": ["CLIENT_ID", "CLIENT_SECRET"],
+  "description": "Link your Microsoft account for Xbox and other Microsoft services.",
+  "wasm_file": "microsoft.wasm"
+}

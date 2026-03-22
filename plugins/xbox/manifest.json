@@ -1,0 +1,10 @@
+{
+  "id": "xbox",
+  "name": "Xbox",
+  "version": "0.1.0",
+  "api_version": "1",
+  "auth_type": "oauth2",
+  "required_secrets": ["CLIENT_ID", "CLIENT_SECRET"],
+  "description": "Import your Xbox game library and achievements.",
+  "wasm_file": "xbox.wasm"
+}

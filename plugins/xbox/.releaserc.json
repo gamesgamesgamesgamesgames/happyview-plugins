@@ -10,7 +10,8 @@
     }],
     ["@semantic-release/github", {
       "assets": [
-        {"path": "../../target/wasm32-unknown-unknown/release/xbox_plugin.wasm", "name": "xbox-${nextRelease.version}.wasm", "label": "Xbox Plugin (${nextRelease.version})"}
+        {"path": "../../target/wasm32-unknown-unknown/release/xbox_plugin.wasm", "name": "xbox.wasm", "label": "Xbox Plugin WASM"},
+        {"path": "manifest.json", "name": "manifest.json", "label": "Plugin Manifest"}
       ]
     }]
   ]

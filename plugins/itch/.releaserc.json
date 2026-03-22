@@ -10,7 +10,8 @@
     }],
     ["@semantic-release/github", {
       "assets": [
-        {"path": "../../target/wasm32-unknown-unknown/release/itch_plugin.wasm", "name": "itch-${nextRelease.version}.wasm", "label": "itch.io Plugin (${nextRelease.version})"}
+        {"path": "../../target/wasm32-unknown-unknown/release/itch_plugin.wasm", "name": "itch.wasm", "label": "itch.io Plugin WASM"},
+        {"path": "manifest.json", "name": "manifest.json", "label": "Plugin Manifest"}
       ]
     }]
   ]
