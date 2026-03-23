@@ -67,7 +67,40 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 extern "C" {
     fn host_http_request(req_ptr: i32, req_len: i32) -> i64;
     fn host_get_secret(name_ptr: i32, name_len: i32) -> i64;
+    fn host_log(level_ptr: i32, level_len: i32, msg_ptr: i32, msg_len: i32);
 }
+
+// ============================================================================
+// Logging Helpers
+// ============================================================================
+
+#[cfg(target_arch = "wasm32")]
+fn log(level: &str, message: &str) {
+    unsafe {
+        host_log(
+            level.as_ptr() as i32,
+            level.len() as i32,
+            message.as_ptr() as i32,
+            message.len() as i32,
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_info(message: &str) {
+    log("info", message);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_error(message: &str) {
+    log("error", message);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_info(_message: &str) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_error(_message: &str) {}
 
 // ============================================================================
 // Memory Exports
@@ -340,6 +373,7 @@ struct GraphUserProfile {
 
 #[no_mangle]
 pub extern "C" fn plugin_info() -> i64 {
+    log_info("microsoft: plugin_info called");
     let info = PluginInfo {
         id: "microsoft".into(),
         name: "Microsoft".into(),
@@ -357,15 +391,22 @@ pub extern "C" fn plugin_info() -> i64 {
 pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("microsoft: get_authorize_url called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("microsoft: get_authorize_url failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(input) = serde_json::from_slice::<AuthorizeInput>(&bytes) else {
+            log_error("microsoft: get_authorize_url failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
+        log_info(&format!("microsoft: get_authorize_url redirect_uri={}", input.redirect_uri));
+
         let Some(client_id) = get_secret("CLIENT_ID") else {
+            log_error("microsoft: CLIENT_ID not configured");
             return return_error("CONFIG_ERROR", "CLIENT_ID not configured", false);
         };
 
@@ -379,6 +420,7 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
             urlencoding_encode(&input.state)
         );
 
+        log_info("microsoft: get_authorize_url returning URL");
         return_ok(&url)
     }
 
@@ -393,23 +435,32 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("microsoft: handle_callback called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("microsoft: handle_callback failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(input) = serde_json::from_slice::<CallbackInput>(&bytes) else {
+            log_error("microsoft: handle_callback failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
         let Some(code) = input.code else {
+            log_error("microsoft: handle_callback no authorization code received");
             return return_error("AUTH_FAILED", "No authorization code received", false);
         };
 
+        log_info("microsoft: handle_callback received authorization code");
+
         let Some(client_id) = get_secret("CLIENT_ID") else {
+            log_error("microsoft: CLIENT_ID not configured");
             return return_error("CONFIG_ERROR", "CLIENT_ID not configured", false);
         };
 
         let Some(client_secret) = get_secret("CLIENT_SECRET") else {
+            log_error("microsoft: CLIENT_SECRET not configured");
             return return_error("CONFIG_ERROR", "CLIENT_SECRET not configured", false);
         };
 
@@ -419,7 +470,10 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
             .and_then(|v| v.as_str())
             .unwrap_or("http://localhost:3001/dashboard/settings/accounts/");
 
+        log_info(&format!("microsoft: handle_callback redirect_uri={}", redirect_uri));
+
         // Exchange code for Microsoft token
+        log_info("microsoft: exchanging code for token");
         let token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
         let body = format!(
             "client_id={}&client_secret={}&code={}&redirect_uri={}&grant_type=authorization_code",
@@ -432,6 +486,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
         let ms_token_resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
             Err(e) => {
+                log_error(&format!("microsoft: token exchange failed: {}", e));
                 return return_error("TOKEN_ERROR", &format!("Failed to get token: {}", e), true)
             }
         };
@@ -439,6 +494,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
         let ms_token: MsTokenResponse = match serde_json::from_str(&ms_token_resp) {
             Ok(t) => t,
             Err(e) => {
+                log_error(&format!("microsoft: failed to parse token response: {}", e));
                 return return_error(
                     "TOKEN_ERROR",
                     &format!("Failed to parse token: {}", e),
@@ -447,6 +503,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
             }
         };
 
+        log_info("microsoft: handle_callback token exchange successful");
         let token_set = TokenSet {
             access_token: ms_token.access_token,
             token_type: "Bearer".into(),
@@ -468,7 +525,10 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("microsoft: refresh_tokens called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("microsoft: refresh_tokens failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
@@ -480,17 +540,21 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
         }
 
         let Ok(input) = serde_json::from_slice::<RefreshInput>(&bytes) else {
+            log_error("microsoft: refresh_tokens failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
         let Some(client_id) = get_secret("CLIENT_ID") else {
+            log_error("microsoft: CLIENT_ID not configured");
             return return_error("CONFIG_ERROR", "CLIENT_ID not configured", false);
         };
 
         let Some(client_secret) = get_secret("CLIENT_SECRET") else {
+            log_error("microsoft: CLIENT_SECRET not configured");
             return return_error("CONFIG_ERROR", "CLIENT_SECRET not configured", false);
         };
 
+        log_info("microsoft: refreshing token");
         let token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
         let body = format!(
             "client_id={}&client_secret={}&refresh_token={}&grant_type=refresh_token",
@@ -502,6 +566,7 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
         let resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
             Err(e) => {
+                log_error(&format!("microsoft: token refresh failed: {}", e));
                 return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true)
             }
         };
@@ -509,10 +574,12 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
         let ms_token: MsTokenResponse = match serde_json::from_str(&resp) {
             Ok(t) => t,
             Err(e) => {
+                log_error(&format!("microsoft: failed to parse refresh response: {}", e));
                 return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false)
             }
         };
 
+        log_info("microsoft: refresh_tokens successful");
         let token_set = TokenSet {
             access_token: ms_token.access_token,
             token_type: "Bearer".into(),
@@ -534,20 +601,26 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("microsoft: get_profile called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("microsoft: get_profile failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(input) = serde_json::from_slice::<ProfileInput>(&bytes) else {
+            log_error("microsoft: get_profile failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
         // Get user profile from Microsoft Graph
+        log_info("microsoft: fetching profile from Graph API");
         let profile_url = "https://graph.microsoft.com/v1.0/me";
         let graph_profile = match http_get_with_auth(profile_url, &input.access_token) {
             Ok(resp) => match serde_json::from_str::<GraphUserProfile>(&resp) {
                 Ok(p) => p,
                 Err(e) => {
+                    log_error(&format!("microsoft: failed to parse profile: {}", e));
                     return return_error(
                         "PROFILE_ERROR",
                         &format!("Failed to parse profile: {}", e),
@@ -556,6 +629,7 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
                 }
             },
             Err(e) => {
+                log_error(&format!("microsoft: failed to get profile: {}", e));
                 return return_error(
                     "PROFILE_ERROR",
                     &format!("Failed to get profile: {}", e),
@@ -564,6 +638,7 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
             }
         };
 
+        log_info(&format!("microsoft: get_profile successful for id={}", graph_profile.id));
         let profile = ExternalProfile {
             account_id: graph_profile.id,
             display_name: graph_profile.display_name,
@@ -585,11 +660,15 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("microsoft: sync_account called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("microsoft: sync_account failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(_input) = serde_json::from_slice::<SyncInput>(&bytes) else {
+            log_error("microsoft: sync_account failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
@@ -598,6 +677,7 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
         // - Microsoft Store purchases (requires different API/scopes)
         // - PC Game Pass data (requires Xbox APIs, which xbox plugin handles)
         // For now, return empty - this plugin is primarily for account linking
+        log_info("microsoft: sync_account returning empty (account linking only)");
         let records: Vec<SyncRecord> = vec![];
 
         return_ok(&records)

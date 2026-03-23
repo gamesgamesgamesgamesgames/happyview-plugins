@@ -67,7 +67,40 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 extern "C" {
     fn host_http_request(req_ptr: i32, req_len: i32) -> i64;
     fn host_get_secret(name_ptr: i32, name_len: i32) -> i64;
+    fn host_log(level_ptr: i32, level_len: i32, msg_ptr: i32, msg_len: i32);
 }
+
+// ============================================================================
+// Logging Helpers
+// ============================================================================
+
+#[cfg(target_arch = "wasm32")]
+fn log(level: &str, message: &str) {
+    unsafe {
+        host_log(
+            level.as_ptr() as i32,
+            level.len() as i32,
+            message.as_ptr() as i32,
+            message.len() as i32,
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_info(message: &str) {
+    log("info", message);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_error(message: &str) {
+    log("error", message);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_info(_message: &str) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_error(_message: &str) {}
 
 // ============================================================================
 // Memory Exports
@@ -454,6 +487,7 @@ struct TitleHistory {
 
 #[no_mangle]
 pub extern "C" fn plugin_info() -> i64 {
+    log_info("xbox: plugin_info called");
     let info = PluginInfo {
         id: "xbox".into(),
         name: "Xbox".into(),
@@ -471,15 +505,22 @@ pub extern "C" fn plugin_info() -> i64 {
 pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("xbox: get_authorize_url called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("xbox: get_authorize_url failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(input) = serde_json::from_slice::<AuthorizeInput>(&bytes) else {
+            log_error("xbox: get_authorize_url failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
+        log_info(&format!("xbox: get_authorize_url redirect_uri={}", input.redirect_uri));
+
         let Some(client_id) = get_secret("CLIENT_ID") else {
+            log_error("xbox: CLIENT_ID not configured");
             return return_error("CONFIG_ERROR", "CLIENT_ID not configured", false);
         };
 
@@ -493,6 +534,7 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
             urlencoding_encode(&input.state)
         );
 
+        log_info("xbox: get_authorize_url returning URL");
         return_ok(&url)
     }
 
@@ -507,23 +549,32 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("xbox: handle_callback called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("xbox: handle_callback failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(input) = serde_json::from_slice::<CallbackInput>(&bytes) else {
+            log_error("xbox: handle_callback failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
         let Some(code) = input.code else {
+            log_error("xbox: handle_callback no authorization code received");
             return return_error("AUTH_FAILED", "No authorization code received", false);
         };
 
+        log_info("xbox: handle_callback received authorization code");
+
         let Some(client_id) = get_secret("CLIENT_ID") else {
+            log_error("xbox: CLIENT_ID not configured");
             return return_error("CONFIG_ERROR", "CLIENT_ID not configured", false);
         };
 
         let Some(client_secret) = get_secret("CLIENT_SECRET") else {
+            log_error("xbox: CLIENT_SECRET not configured");
             return return_error("CONFIG_ERROR", "CLIENT_SECRET not configured", false);
         };
 
@@ -534,7 +585,10 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
             .and_then(|v| v.as_str())
             .unwrap_or("http://localhost:3001/dashboard/settings/accounts/");
 
+        log_info(&format!("xbox: handle_callback redirect_uri={}", redirect_uri));
+
         // Exchange code for Microsoft token
+        log_info("xbox: exchanging code for Microsoft token");
         let token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
         let body = format!(
             "client_id={}&client_secret={}&code={}&redirect_uri={}&grant_type=authorization_code",
@@ -547,6 +601,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
         let ms_token_resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
             Err(e) => {
+                log_error(&format!("xbox: MS token exchange failed: {}", e));
                 return return_error(
                     "TOKEN_ERROR",
                     &format!("Failed to get MS token: {}", e),
@@ -558,6 +613,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
         let ms_token: MsTokenResponse = match serde_json::from_str(&ms_token_resp) {
             Ok(t) => t,
             Err(e) => {
+                log_error(&format!("xbox: failed to parse MS token response: {}", e));
                 return return_error(
                     "TOKEN_ERROR",
                     &format!("Failed to parse MS token: {}", e),
@@ -565,6 +621,8 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
                 )
             }
         };
+
+        log_info("xbox: handle_callback MS token exchange successful");
 
         // The MS access token is used as the "access_token" for simplicity
         // In get_profile and sync_account, we'll exchange it for Xbox Live tokens
@@ -589,7 +647,10 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("xbox: refresh_tokens called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("xbox: refresh_tokens failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
@@ -601,17 +662,21 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
         }
 
         let Ok(input) = serde_json::from_slice::<RefreshInput>(&bytes) else {
+            log_error("xbox: refresh_tokens failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
         let Some(client_id) = get_secret("CLIENT_ID") else {
+            log_error("xbox: CLIENT_ID not configured");
             return return_error("CONFIG_ERROR", "CLIENT_ID not configured", false);
         };
 
         let Some(client_secret) = get_secret("CLIENT_SECRET") else {
+            log_error("xbox: CLIENT_SECRET not configured");
             return return_error("CONFIG_ERROR", "CLIENT_SECRET not configured", false);
         };
 
+        log_info("xbox: refreshing MS token");
         let token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
         let body = format!(
             "client_id={}&client_secret={}&refresh_token={}&grant_type=refresh_token",
@@ -623,6 +688,7 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
         let resp = match http_post(token_url, &body, "application/x-www-form-urlencoded") {
             Ok(r) => r,
             Err(e) => {
+                log_error(&format!("xbox: token refresh failed: {}", e));
                 return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true)
             }
         };
@@ -630,10 +696,12 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
         let ms_token: MsTokenResponse = match serde_json::from_str(&resp) {
             Ok(t) => t,
             Err(e) => {
+                log_error(&format!("xbox: failed to parse refresh response: {}", e));
                 return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false)
             }
         };
 
+        log_info("xbox: refresh_tokens successful");
         let token_set = TokenSet {
             access_token: ms_token.access_token,
             token_type: "Bearer".into(),
@@ -655,27 +723,42 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("xbox: get_profile called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("xbox: get_profile failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(input) = serde_json::from_slice::<ProfileInput>(&bytes) else {
+            log_error("xbox: get_profile failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
         // Exchange MS token for Xbox Live token
+        log_info("xbox: exchanging MS token for XBL token");
         let (xbl_token, user_hash) = match get_xbl_token(&input.access_token) {
             Ok(t) => t,
-            Err(e) => return return_error("AUTH_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("xbox: XBL token exchange failed: {}", e));
+                return return_error("AUTH_ERROR", &e, true);
+            }
         };
 
         // Exchange XBL token for XSTS token
+        log_info("xbox: exchanging XBL token for XSTS token");
         let (xsts_token, xuid, gamertag) = match get_xsts_token(&xbl_token) {
             Ok(t) => t,
-            Err(e) => return return_error("AUTH_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("xbox: XSTS token exchange failed: {}", e));
+                return return_error("AUTH_ERROR", &e, true);
+            }
         };
 
+        log_info(&format!("xbox: got XSTS token for xuid={} gamertag={}", xuid, gamertag));
+
         // Get profile details
+        log_info("xbox: fetching profile details");
         let auth_header = format!("XBL3.0 x={};{}", user_hash, xsts_token);
         let profile_url = format!(
             "https://profile.xboxlive.com/users/xuid({})/profile/settings?settings=Gamertag,GameDisplayPicRaw",
@@ -696,12 +779,17 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
                             }
                         }
                     }
+                    log_info(&format!("xbox: profile fetched for {}", name));
                     (name, avatar)
                 } else {
+                    log_info("xbox: using gamertag from XSTS (profile parse failed)");
                     (gamertag.clone(), None)
                 }
             }
-            Err(_) => (gamertag.clone(), None),
+            Err(e) => {
+                log_info(&format!("xbox: profile fetch failed ({}), using gamertag from XSTS", e));
+                (gamertag.clone(), None)
+            }
         };
 
         let profile = ExternalProfile {
@@ -714,6 +802,7 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
             avatar_url,
         };
 
+        log_info("xbox: get_profile completed successfully");
         return_ok(&profile)
     }
 
@@ -728,25 +817,38 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("xbox: sync_account called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("xbox: sync_account failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let Ok(input) = serde_json::from_slice::<SyncInput>(&bytes) else {
+            log_error("xbox: sync_account failed to parse input");
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
         // Exchange MS token for Xbox Live tokens
+        log_info("xbox: exchanging MS token for XBL token");
         let (xbl_token, user_hash) = match get_xbl_token(&input.access_token) {
             Ok(t) => t,
-            Err(e) => return return_error("AUTH_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("xbox: XBL token exchange failed: {}", e));
+                return return_error("AUTH_ERROR", &e, true);
+            }
         };
 
+        log_info("xbox: exchanging XBL token for XSTS token");
         let (xsts_token, xuid, _gamertag) = match get_xsts_token(&xbl_token) {
             Ok(t) => t,
-            Err(e) => return return_error("AUTH_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("xbox: XSTS token exchange failed: {}", e));
+                return return_error("AUTH_ERROR", &e, true);
+            }
         };
 
+        log_info(&format!("xbox: fetching title history for xuid={}", xuid));
         let auth_header = format!("XBL3.0 x={};{}", user_hash, xsts_token);
 
         // Get title history (games played)
@@ -757,10 +859,19 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
 
         let titles = match http_get_with_auth(&titles_url, &auth_header) {
             Ok(resp) => match serde_json::from_str::<TitleHistoryResponse>(&resp) {
-                Ok(t) => t.titles,
-                Err(_) => vec![],
+                Ok(t) => {
+                    log_info(&format!("xbox: fetched {} titles", t.titles.len()));
+                    t.titles
+                }
+                Err(e) => {
+                    log_error(&format!("xbox: failed to parse title history: {}", e));
+                    vec![]
+                }
             },
-            Err(_) => vec![],
+            Err(e) => {
+                log_error(&format!("xbox: failed to fetch title history: {}", e));
+                vec![]
+            }
         };
 
         // Convert to sync records
@@ -791,6 +902,7 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
             });
         }
 
+        log_info(&format!("xbox: sync_account completed with {} records", records.len()));
         return_ok(&records)
     }
 
@@ -807,6 +919,7 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
 
 #[cfg(target_arch = "wasm32")]
 fn get_xbl_token(ms_access_token: &str) -> Result<(String, String), String> {
+    log_info("xbox: get_xbl_token - authenticating with Xbox Live");
     let xbl_url = "https://user.auth.xboxlive.com/user/authenticate";
 
     let req = XblAuthRequest {
@@ -820,23 +933,34 @@ fn get_xbl_token(ms_access_token: &str) -> Result<(String, String), String> {
     };
 
     let body = serde_json::to_string(&req).map_err(|e| e.to_string())?;
-    let resp = http_post(xbl_url, &body, "application/json")?;
+    let resp = http_post(xbl_url, &body, "application/json").map_err(|e| {
+        log_error(&format!("xbox: XBL auth request failed: {}", e));
+        e
+    })?;
 
     let xbl_resp: XblAuthResponse =
-        serde_json::from_str(&resp).map_err(|e| format!("Failed to parse XBL response: {}", e))?;
+        serde_json::from_str(&resp).map_err(|e| {
+            log_error(&format!("xbox: failed to parse XBL response: {}", e));
+            format!("Failed to parse XBL response: {}", e)
+        })?;
 
     let user_hash = xbl_resp
         .display_claims
         .xui
         .first()
         .map(|u| u.uhs.clone())
-        .ok_or("No user hash in XBL response")?;
+        .ok_or_else(|| {
+            log_error("xbox: no user hash in XBL response");
+            "No user hash in XBL response".to_string()
+        })?;
 
+    log_info("xbox: get_xbl_token successful");
     Ok((xbl_resp.token, user_hash))
 }
 
 #[cfg(target_arch = "wasm32")]
 fn get_xsts_token(xbl_token: &str) -> Result<(String, String, String), String> {
+    log_info("xbox: get_xsts_token - getting XSTS token");
     let xsts_url = "https://xsts.auth.xboxlive.com/xsts/authorize";
 
     let req = XstsAuthRequest {
@@ -849,17 +973,27 @@ fn get_xsts_token(xbl_token: &str) -> Result<(String, String, String), String> {
     };
 
     let body = serde_json::to_string(&req).map_err(|e| e.to_string())?;
-    let resp = http_post(xsts_url, &body, "application/json")?;
+    let resp = http_post(xsts_url, &body, "application/json").map_err(|e| {
+        log_error(&format!("xbox: XSTS auth request failed: {}", e));
+        e
+    })?;
 
     let xsts_resp: XstsAuthResponse =
-        serde_json::from_str(&resp).map_err(|e| format!("Failed to parse XSTS response: {}", e))?;
+        serde_json::from_str(&resp).map_err(|e| {
+            log_error(&format!("xbox: failed to parse XSTS response: {}", e));
+            format!("Failed to parse XSTS response: {}", e)
+        })?;
 
     let user_info = xsts_resp
         .display_claims
         .xui
         .first()
-        .ok_or("No user info in XSTS response")?;
+        .ok_or_else(|| {
+            log_error("xbox: no user info in XSTS response");
+            "No user info in XSTS response".to_string()
+        })?;
 
+    log_info(&format!("xbox: get_xsts_token successful for xid={}", user_info.xid));
     Ok((
         xsts_resp.token,
         user_info.xid.clone(),

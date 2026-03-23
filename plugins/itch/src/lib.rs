@@ -65,7 +65,40 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 extern "C" {
     fn host_http_request(req_ptr: i32, req_len: i32) -> i64;
     fn host_get_secret(name_ptr: i32, name_len: i32) -> i64;
+    fn host_log(level_ptr: i32, level_len: i32, msg_ptr: i32, msg_len: i32);
 }
+
+// ============================================================================
+// Logging Helpers
+// ============================================================================
+
+#[cfg(target_arch = "wasm32")]
+fn log(level: &str, message: &str) {
+    unsafe {
+        host_log(
+            level.as_ptr() as i32,
+            level.len() as i32,
+            message.as_ptr() as i32,
+            message.len() as i32,
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_info(message: &str) {
+    log("info", message);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_error(message: &str) {
+    log("error", message);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_info(_message: &str) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_error(_message: &str) {}
 
 // ============================================================================
 // Memory Exports
@@ -341,6 +374,7 @@ const ITCH_API_BASE: &str = "https://itch.io/api/1";
 
 #[no_mangle]
 pub extern "C" fn plugin_info() -> i64 {
+    log_info("itch: plugin_info called");
     let info = PluginInfo {
         id: "itch".into(),
         name: "itch.io".into(),
@@ -358,18 +392,29 @@ pub extern "C" fn plugin_info() -> i64 {
 pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("itch: get_authorize_url called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("itch: get_authorize_url failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let input: AuthorizeInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("itch: get_authorize_url parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
+
+        log_info(&format!("itch: get_authorize_url redirect_uri={}", input.redirect_uri));
 
         let client_id = match get_secret("CLIENT_ID") {
             Some(id) => id,
-            None => return return_error("MISSING_SECRET", "CLIENT_ID not configured", false),
+            None => {
+                log_error("itch: CLIENT_ID not configured");
+                return return_error("MISSING_SECRET", "CLIENT_ID not configured", false);
+            }
         };
 
         // itch.io OAuth2 scopes: profile:me, profile:games (owned games)
@@ -384,6 +429,7 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
             urlencod(&input.state)
         );
 
+        log_info("itch: get_authorize_url returning URL");
         return_ok(&url)
     }
 
@@ -398,31 +444,49 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("itch: handle_callback called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("itch: handle_callback failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let input: CallbackInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("itch: handle_callback parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
 
         let code = match &input.code {
             Some(c) => c,
-            None => return return_error("MISSING_CODE", "Authorization code is required", false),
+            None => {
+                log_error("itch: handle_callback no authorization code received");
+                return return_error("MISSING_CODE", "Authorization code is required", false);
+            }
         };
+
+        log_info("itch: handle_callback received authorization code");
 
         let client_id = match get_secret("CLIENT_ID") {
             Some(id) => id,
-            None => return return_error("MISSING_SECRET", "CLIENT_ID not configured", false),
+            None => {
+                log_error("itch: CLIENT_ID not configured");
+                return return_error("MISSING_SECRET", "CLIENT_ID not configured", false);
+            }
         };
 
         let client_secret = match get_secret("CLIENT_SECRET") {
             Some(s) => s,
-            None => return return_error("MISSING_SECRET", "CLIENT_SECRET not configured", false),
+            None => {
+                log_error("itch: CLIENT_SECRET not configured");
+                return return_error("MISSING_SECRET", "CLIENT_SECRET not configured", false);
+            }
         };
 
         // Exchange code for token
+        log_info("itch: exchanging code for token");
         let token_body = format!(
             "grant_type=authorization_code&code={}&client_id={}&client_secret={}",
             urlencod(code),
@@ -437,6 +501,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
         ) {
             Ok(r) => r,
             Err(e) => {
+                log_error(&format!("itch: token exchange failed: {}", e));
                 return return_error(
                     "TOKEN_ERROR",
                     &format!("Token exchange failed: {}", e),
@@ -448,6 +513,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
         let tokens: ItchTokenResponse = match serde_json::from_str(&token_response) {
             Ok(t) => t,
             Err(e) => {
+                log_error(&format!("itch: failed to parse token response: {}", e));
                 return return_error(
                     "INVALID_RESPONSE",
                     &format!("Failed to parse token: {}", e),
@@ -456,6 +522,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
             }
         };
 
+        log_info("itch: handle_callback token exchange successful");
         let token_set = TokenSet {
             access_token: tokens.access_token,
             token_type: tokens.token_type,
@@ -478,7 +545,10 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
     // itch.io tokens don't expire, so just return the same token
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("itch: refresh_tokens called (itch.io tokens don't expire)");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("itch: refresh_tokens failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
@@ -491,10 +561,14 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
 
         let input: RefreshInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("itch: refresh_tokens parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
 
         // itch.io tokens don't expire - return same token
+        log_info("itch: refresh_tokens returning same token (no expiry)");
         let token_set = TokenSet {
             access_token: input.refresh_token,
             token_type: "bearer".into(),
@@ -516,28 +590,40 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("itch: get_profile called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("itch: get_profile failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let input: ProfileInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("itch: get_profile parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
 
+        log_info("itch: fetching user profile from /me");
         let url = format!("{}/me", ITCH_API_BASE);
         let body = match http_get_with_auth(&url, &input.access_token) {
             Ok(b) => b,
-            Err(e) => return return_error("HTTP_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("itch: get_profile HTTP error: {}", e));
+                return return_error("HTTP_ERROR", &e, true);
+            }
         };
 
         let me: ItchMeResponse = match serde_json::from_str(&body) {
             Ok(m) => m,
             Err(e) => {
+                log_error(&format!("itch: failed to parse profile response: {}", e));
                 return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false)
             }
         };
 
+        log_info(&format!("itch: get_profile successful for user_id={} username={}", me.user.id, me.user.username));
         let profile = ExternalProfile {
             account_id: me.user.id.to_string(),
             display_name: me.user.display_name.or(Some(me.user.username)),
@@ -559,55 +645,80 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
 pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("itch: sync_account called");
+
         let Some(bytes) = read_input(input_ptr, input_len) else {
+            log_error("itch: sync_account failed to read input");
             return return_error("INVALID_INPUT", "Failed to read input", false);
         };
 
         let input: SyncInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("itch: sync_account parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
 
-        // Fetch user profile
+        // Fetch user profile to validate token
+        log_info("itch: validating token with /me");
         let me_url = format!("{}/me", ITCH_API_BASE);
         let me_body = match http_get_with_auth(&me_url, &input.access_token) {
             Ok(b) => b,
-            Err(e) => return return_error("HTTP_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("itch: sync_account token validation failed: {}", e));
+                return return_error("HTTP_ERROR", &e, true);
+            }
         };
 
         // Validate token by parsing profile response
         if let Err(e) = serde_json::from_str::<ItchMeResponse>(&me_body) {
+            log_error(&format!("itch: sync_account profile parse error: {}", e));
             return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false);
         }
+
+        log_info("itch: token validated, fetching owned games");
 
         // Fetch owned games - paginated
         let mut all_games: Vec<OwnedKey> = Vec::new();
         let mut page = 1;
 
         loop {
+            log_info(&format!("itch: fetching owned keys page {}", page));
             let keys_url = format!("{}/my-owned-keys?page={}", ITCH_API_BASE, page);
             let keys_body = match http_get_with_auth(&keys_url, &input.access_token) {
                 Ok(b) => b,
-                Err(_) => break,
+                Err(e) => {
+                    log_info(&format!("itch: stopping pagination at page {} due to error: {}", page, e));
+                    break;
+                }
             };
 
             let keys: ItchOwnedKeysResponse = match serde_json::from_str(&keys_body) {
                 Ok(k) => k,
-                Err(_) => break,
+                Err(e) => {
+                    log_info(&format!("itch: stopping pagination at page {} due to parse error: {}", page, e));
+                    break;
+                }
             };
 
             if keys.owned_keys.is_empty() {
+                log_info(&format!("itch: no more games on page {}, ending pagination", page));
                 break;
             }
 
+            log_info(&format!("itch: fetched {} games on page {}", keys.owned_keys.len(), page));
             all_games.extend(keys.owned_keys);
             page += 1;
 
             // Safety limit
             if page > 50 {
+                log_info("itch: reached page limit (50), ending pagination");
                 break;
             }
         }
+
+        log_info(&format!("itch: fetched {} total games", all_games.len()));
 
         // Build sync records
         let mut records: Vec<SyncRecord> = Vec::new();
@@ -632,6 +743,7 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
             });
         }
 
+        log_info(&format!("itch: sync_account completed with {} records", records.len()));
         return_ok(&records)
     }
 

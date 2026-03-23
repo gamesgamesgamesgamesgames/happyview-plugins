@@ -8,7 +8,7 @@
 extern crate alloc;
 
 #[cfg(target_arch = "wasm32")]
-use alloc::{format, string::String, string::ToString, vec::Vec};
+use alloc::{format, string::String, string::ToString, vec, vec::Vec};
 
 #[cfg(target_arch = "wasm32")]
 use core::alloc::{GlobalAlloc, Layout};
@@ -67,7 +67,40 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 extern "C" {
     fn host_http_request(req_ptr: i32, req_len: i32) -> i64;
     fn host_get_secret(name_ptr: i32, name_len: i32) -> i64;
+    fn host_log(level_ptr: i32, level_len: i32, msg_ptr: i32, msg_len: i32);
 }
+
+// ============================================================================
+// Logging Helpers
+// ============================================================================
+
+#[cfg(target_arch = "wasm32")]
+fn log(level: &str, message: &str) {
+    unsafe {
+        host_log(
+            level.as_ptr() as i32,
+            level.len() as i32,
+            message.as_ptr() as i32,
+            message.len() as i32,
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_info(message: &str) {
+    log("info", message);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn log_error(message: &str) {
+    log("error", message);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_info(_message: &str) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn log_error(_message: &str) {}
 
 // ============================================================================
 // Memory Exports
@@ -354,7 +387,7 @@ pub extern "C" fn plugin_info() -> i64 {
         version: "0.1.0".into(),
         api_version: "1".into(),
         icon_url: Some("https://store.steampowered.com/favicon.ico".into()),
-        required_secrets: alloc::vec!["API_KEY".into()],
+        required_secrets: vec!["API_KEY".into()],
         auth_type: "openid".into(),
         config_schema: None,
     };
@@ -365,15 +398,28 @@ pub extern "C" fn plugin_info() -> i64 {
 pub extern "C" fn get_authorize_url(ptr: u32, len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("steam: get_authorize_url called");
+
         let bytes = match read_input(ptr, len) {
             Some(b) => b,
-            None => return return_error("INVALID_INPUT", "Failed to read input", false),
+            None => {
+                log_error("steam: get_authorize_url failed to read input");
+                return return_error("INVALID_INPUT", "Failed to read input", false);
+            }
         };
 
         let input: AuthorizeInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("steam: get_authorize_url parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
+
+        log_info(&format!(
+            "steam: building OpenID URL with redirect_uri={}",
+            input.redirect_uri
+        ));
 
         // Build OpenID 2.0 authentication URL
         // Steam uses claimed_id and identity as the same value for authentication
@@ -402,6 +448,7 @@ pub extern "C" fn get_authorize_url(ptr: u32, len: u32) -> i64 {
             .join("&");
 
         let url = format!("{}?{}", STEAM_OPENID_URL, query);
+        log_info("steam: get_authorize_url completed successfully");
         return_ok(&url)
     }
 
@@ -416,14 +463,22 @@ pub extern "C" fn get_authorize_url(ptr: u32, len: u32) -> i64 {
 pub extern "C" fn handle_callback(ptr: u32, len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("steam: handle_callback called");
+
         let bytes = match read_input(ptr, len) {
             Some(b) => b,
-            None => return return_error("INVALID_INPUT", "Failed to read input", false),
+            None => {
+                log_error("steam: handle_callback failed to read input");
+                return return_error("INVALID_INPUT", "Failed to read input", false);
+            }
         };
 
         let input: CallbackInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("steam: handle_callback parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
 
         // Extract Steam ID from openid.claimed_id
@@ -438,13 +493,17 @@ pub extern "C" fn handle_callback(ptr: u32, len: u32) -> i64 {
                 if let Some(pos) = id.rfind('/') {
                     &id[pos + 1..]
                 } else {
+                    log_error("steam: invalid claimed_id format");
                     return return_error("INVALID_RESPONSE", "Invalid claimed_id format", false);
                 }
             }
             None => {
+                log_error("steam: missing openid.claimed_id in callback");
                 return return_error("INVALID_RESPONSE", "Missing openid.claimed_id", false);
             }
         };
+
+        log_info(&format!("steam: extracted steam_id={}", steam_id));
 
         // Verify the OpenID response with Steam
         // Build verification request by changing mode to check_authentication
@@ -469,6 +528,7 @@ pub extern "C" fn handle_callback(ptr: u32, len: u32) -> i64 {
             .join("&");
 
         // POST to Steam for verification
+        log_info("steam: verifying OpenID response with Steam");
         let verify_result = http_post(
             STEAM_OPENID_URL,
             &verify_body,
@@ -480,14 +540,17 @@ pub extern "C" fn handle_callback(ptr: u32, len: u32) -> i64 {
                 // Steam returns key-value pairs, one per line
                 // We need to find "is_valid:true"
                 if !response_body.contains("is_valid:true") {
+                    log_error("steam: OpenID verification failed - is_valid:true not found");
                     return return_error(
                         "VERIFICATION_FAILED",
                         "Steam OpenID verification failed",
                         false,
                     );
                 }
+                log_info("steam: OpenID verification successful");
             }
             Err(e) => {
+                log_error(&format!("steam: OpenID verification request failed: {}", e));
                 return return_error(
                     "VERIFICATION_ERROR",
                     &format!("Failed to verify with Steam: {}", e),
@@ -506,6 +569,10 @@ pub extern "C" fn handle_callback(ptr: u32, len: u32) -> i64 {
             refresh_token: None,
         };
 
+        log_info(&format!(
+            "steam: handle_callback completed successfully for steam_id={}",
+            steam_id
+        ));
         return_ok(&tokens)
     }
 
@@ -521,6 +588,7 @@ pub extern "C" fn refresh_tokens(ptr: u32, len: u32) -> i64 {
     // Steam doesn't use OAuth tokens - the Steam ID is permanent
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("steam: refresh_tokens called (no-op for Steam)");
         let bytes = match read_input(ptr, len) {
             Some(b) => b,
             None => return return_error("INVALID_INPUT", "Failed to read input", false),
@@ -560,22 +628,35 @@ pub extern "C" fn refresh_tokens(ptr: u32, len: u32) -> i64 {
 pub extern "C" fn get_profile(ptr: u32, len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("steam: get_profile called");
+
         let bytes = match read_input(ptr, len) {
             Some(b) => b,
-            None => return return_error("INVALID_INPUT", "Failed to read input", false),
+            None => {
+                log_error("steam: get_profile failed to read input");
+                return return_error("INVALID_INPUT", "Failed to read input", false);
+            }
         };
 
         let input: ProfileInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("steam: get_profile parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
 
         let api_key = match get_secret("API_KEY") {
             Some(k) => k,
-            None => return return_error("MISSING_SECRET", "API_KEY not configured", false),
+            None => {
+                log_error("steam: API_KEY not configured");
+                return return_error("MISSING_SECRET", "API_KEY not configured", false);
+            }
         };
 
         let steam_id = &input.access_token;
+        log_info(&format!("steam: fetching profile for steam_id={}", steam_id));
+
         let url = format!(
             "{}/ISteamUser/GetPlayerSummaries/v2/?key={}&steamids={}",
             STEAM_API_BASE, api_key, steam_id
@@ -583,19 +664,26 @@ pub extern "C" fn get_profile(ptr: u32, len: u32) -> i64 {
 
         let body = match http_get(&url) {
             Ok(b) => b,
-            Err(e) => return return_error("HTTP_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("steam: GetPlayerSummaries API error: {}", e));
+                return return_error("HTTP_ERROR", &e, true);
+            }
         };
 
         let resp: SteamPlayerSummary = match serde_json::from_str(&body) {
             Ok(r) => r,
             Err(e) => {
-                return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false)
+                log_error(&format!("steam: failed to parse player summary: {}", e));
+                return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false);
             }
         };
 
         let player = match resp.response.players.first() {
             Some(p) => p,
-            None => return return_error("NOT_FOUND", "Player not found", false),
+            None => {
+                log_error(&format!("steam: player not found for steam_id={}", steam_id));
+                return return_error("NOT_FOUND", "Player not found", false);
+            }
         };
 
         let profile = ExternalProfile {
@@ -605,6 +693,11 @@ pub extern "C" fn get_profile(ptr: u32, len: u32) -> i64 {
             avatar_url: player.avatarfull.clone(),
         };
 
+        log_info(&format!(
+            "steam: get_profile completed for {} ({})",
+            player.personaname.as_deref().unwrap_or("unknown"),
+            steam_id
+        ));
         return_ok(&profile)
     }
 
@@ -619,22 +712,35 @@ pub extern "C" fn get_profile(ptr: u32, len: u32) -> i64 {
 pub extern "C" fn sync_account(ptr: u32, len: u32) -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
+        log_info("steam: sync_account called");
+
         let bytes = match read_input(ptr, len) {
             Some(b) => b,
-            None => return return_error("INVALID_INPUT", "Failed to read input", false),
+            None => {
+                log_error("steam: sync_account failed to read input");
+                return return_error("INVALID_INPUT", "Failed to read input", false);
+            }
         };
 
         let input: SyncInput = match serde_json::from_slice(&bytes) {
             Ok(i) => i,
-            Err(e) => return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false),
+            Err(e) => {
+                log_error(&format!("steam: sync_account parse error: {}", e));
+                return return_error("INVALID_INPUT", &format!("Parse error: {}", e), false);
+            }
         };
 
         let api_key = match get_secret("API_KEY") {
             Some(k) => k,
-            None => return return_error("MISSING_SECRET", "API_KEY not configured", false),
+            None => {
+                log_error("steam: API_KEY not configured");
+                return return_error("MISSING_SECRET", "API_KEY not configured", false);
+            }
         };
 
         let steam_id = &input.access_token;
+        log_info(&format!("steam: fetching owned games for steam_id={}", steam_id));
+
         let url = format!(
             "{}/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=true&include_played_free_games=true",
             STEAM_API_BASE, api_key, steam_id
@@ -642,17 +748,22 @@ pub extern "C" fn sync_account(ptr: u32, len: u32) -> i64 {
 
         let body = match http_get(&url) {
             Ok(b) => b,
-            Err(e) => return return_error("HTTP_ERROR", &e, true),
+            Err(e) => {
+                log_error(&format!("steam: GetOwnedGames API error: {}", e));
+                return return_error("HTTP_ERROR", &e, true);
+            }
         };
 
         let resp: SteamOwnedGamesResponse = match serde_json::from_str(&body) {
             Ok(r) => r,
             Err(e) => {
-                return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false)
+                log_error(&format!("steam: failed to parse owned games: {}", e));
+                return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false);
             }
         };
 
         let games = resp.response.games.unwrap_or_default();
+        log_info(&format!("steam: found {} owned games", games.len()));
 
         let mut records: Vec<SyncRecord> = Vec::new();
 
@@ -703,6 +814,11 @@ pub extern "C" fn sync_account(ptr: u32, len: u32) -> i64 {
             }
         }
 
+        log_info(&format!(
+            "steam: sync_account completed with {} records for steam_id={}",
+            records.len(),
+            steam_id
+        ));
         return_ok(&records)
     }
 
