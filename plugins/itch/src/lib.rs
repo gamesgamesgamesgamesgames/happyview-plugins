@@ -407,7 +407,10 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
             }
         };
 
-        log_info(&format!("itch: get_authorize_url redirect_uri={}", input.redirect_uri));
+        log_info(&format!(
+            "itch: get_authorize_url redirect_uri={}",
+            input.redirect_uri
+        ));
 
         let client_id = match get_secret("CLIENT_ID") {
             Some(id) => id,
@@ -506,7 +509,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
                     "TOKEN_ERROR",
                     &format!("Token exchange failed: {}", e),
                     true,
-                )
+                );
             }
         };
 
@@ -518,7 +521,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
                     "INVALID_RESPONSE",
                     &format!("Failed to parse token: {}", e),
                     false,
-                )
+                );
             }
         };
 
@@ -619,11 +622,14 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
             Ok(m) => m,
             Err(e) => {
                 log_error(&format!("itch: failed to parse profile response: {}", e));
-                return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false)
+                return return_error("INVALID_RESPONSE", &format!("Parse error: {}", e), false);
             }
         };
 
-        log_info(&format!("itch: get_profile successful for user_id={} username={}", me.user.id, me.user.username));
+        log_info(&format!(
+            "itch: get_profile successful for user_id={} username={}",
+            me.user.id, me.user.username
+        ));
         let profile = ExternalProfile {
             account_id: me.user.id.to_string(),
             display_name: me.user.display_name.or(Some(me.user.username)),
@@ -666,7 +672,10 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
         let me_body = match http_get_with_auth(&me_url, &input.access_token) {
             Ok(b) => b,
             Err(e) => {
-                log_error(&format!("itch: sync_account token validation failed: {}", e));
+                log_error(&format!(
+                    "itch: sync_account token validation failed: {}",
+                    e
+                ));
                 return return_error("HTTP_ERROR", &e, true);
             }
         };
@@ -689,7 +698,10 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
             let keys_body = match http_get_with_auth(&keys_url, &input.access_token) {
                 Ok(b) => b,
                 Err(e) => {
-                    log_info(&format!("itch: stopping pagination at page {} due to error: {}", page, e));
+                    log_info(&format!(
+                        "itch: stopping pagination at page {} due to error: {}",
+                        page, e
+                    ));
                     break;
                 }
             };
@@ -697,17 +709,27 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
             let keys: ItchOwnedKeysResponse = match serde_json::from_str(&keys_body) {
                 Ok(k) => k,
                 Err(e) => {
-                    log_info(&format!("itch: stopping pagination at page {} due to parse error: {}", page, e));
+                    log_info(&format!(
+                        "itch: stopping pagination at page {} due to parse error: {}",
+                        page, e
+                    ));
                     break;
                 }
             };
 
             if keys.owned_keys.is_empty() {
-                log_info(&format!("itch: no more games on page {}, ending pagination", page));
+                log_info(&format!(
+                    "itch: no more games on page {}, ending pagination",
+                    page
+                ));
                 break;
             }
 
-            log_info(&format!("itch: fetched {} games on page {}", keys.owned_keys.len(), page));
+            log_info(&format!(
+                "itch: fetched {} games on page {}",
+                keys.owned_keys.len(),
+                page
+            ));
             all_games.extend(keys.owned_keys);
             page += 1;
 
@@ -743,7 +765,10 @@ pub extern "C" fn sync_account(input_ptr: u32, input_len: u32) -> i64 {
             });
         }
 
-        log_info(&format!("itch: sync_account completed with {} records", records.len()));
+        log_info(&format!(
+            "itch: sync_account completed with {} records",
+            records.len()
+        ));
         return_ok(&records)
     }
 

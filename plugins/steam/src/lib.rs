@@ -655,7 +655,10 @@ pub extern "C" fn get_profile(ptr: u32, len: u32) -> i64 {
         };
 
         let steam_id = &input.access_token;
-        log_info(&format!("steam: fetching profile for steam_id={}", steam_id));
+        log_info(&format!(
+            "steam: fetching profile for steam_id={}",
+            steam_id
+        ));
 
         let url = format!(
             "{}/ISteamUser/GetPlayerSummaries/v2/?key={}&steamids={}",
@@ -681,7 +684,10 @@ pub extern "C" fn get_profile(ptr: u32, len: u32) -> i64 {
         let player = match resp.response.players.first() {
             Some(p) => p,
             None => {
-                log_error(&format!("steam: player not found for steam_id={}", steam_id));
+                log_error(&format!(
+                    "steam: player not found for steam_id={}",
+                    steam_id
+                ));
                 return return_error("NOT_FOUND", "Player not found", false);
             }
         };
@@ -739,7 +745,10 @@ pub extern "C" fn sync_account(ptr: u32, len: u32) -> i64 {
         };
 
         let steam_id = &input.access_token;
-        log_info(&format!("steam: fetching owned games for steam_id={}", steam_id));
+        log_info(&format!(
+            "steam: fetching owned games for steam_id={}",
+            steam_id
+        ));
 
         let url = format!(
             "{}/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=true&include_played_free_games=true",

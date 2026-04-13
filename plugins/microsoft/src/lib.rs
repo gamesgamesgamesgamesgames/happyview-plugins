@@ -403,7 +403,10 @@ pub extern "C" fn get_authorize_url(input_ptr: u32, input_len: u32) -> i64 {
             return return_error("INVALID_INPUT", "Failed to parse input", false);
         };
 
-        log_info(&format!("microsoft: get_authorize_url redirect_uri={}", input.redirect_uri));
+        log_info(&format!(
+            "microsoft: get_authorize_url redirect_uri={}",
+            input.redirect_uri
+        ));
 
         let Some(client_id) = get_secret("CLIENT_ID") else {
             log_error("microsoft: CLIENT_ID not configured");
@@ -470,7 +473,10 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
             .and_then(|v| v.as_str())
             .unwrap_or("http://localhost:3001/dashboard/settings/accounts/");
 
-        log_info(&format!("microsoft: handle_callback redirect_uri={}", redirect_uri));
+        log_info(&format!(
+            "microsoft: handle_callback redirect_uri={}",
+            redirect_uri
+        ));
 
         // Exchange code for Microsoft token
         log_info("microsoft: exchanging code for token");
@@ -487,7 +493,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
             Ok(r) => r,
             Err(e) => {
                 log_error(&format!("microsoft: token exchange failed: {}", e));
-                return return_error("TOKEN_ERROR", &format!("Failed to get token: {}", e), true)
+                return return_error("TOKEN_ERROR", &format!("Failed to get token: {}", e), true);
             }
         };
 
@@ -499,7 +505,7 @@ pub extern "C" fn handle_callback(input_ptr: u32, input_len: u32) -> i64 {
                     "TOKEN_ERROR",
                     &format!("Failed to parse token: {}", e),
                     false,
-                )
+                );
             }
         };
 
@@ -567,15 +573,18 @@ pub extern "C" fn refresh_tokens(input_ptr: u32, input_len: u32) -> i64 {
             Ok(r) => r,
             Err(e) => {
                 log_error(&format!("microsoft: token refresh failed: {}", e));
-                return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true)
+                return return_error("TOKEN_ERROR", &format!("Failed to refresh: {}", e), true);
             }
         };
 
         let ms_token: MsTokenResponse = match serde_json::from_str(&resp) {
             Ok(t) => t,
             Err(e) => {
-                log_error(&format!("microsoft: failed to parse refresh response: {}", e));
-                return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false)
+                log_error(&format!(
+                    "microsoft: failed to parse refresh response: {}",
+                    e
+                ));
+                return return_error("TOKEN_ERROR", &format!("Failed to parse: {}", e), false);
             }
         };
 
@@ -625,7 +634,7 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
                         "PROFILE_ERROR",
                         &format!("Failed to parse profile: {}", e),
                         false,
-                    )
+                    );
                 }
             },
             Err(e) => {
@@ -634,11 +643,14 @@ pub extern "C" fn get_profile(input_ptr: u32, input_len: u32) -> i64 {
                     "PROFILE_ERROR",
                     &format!("Failed to get profile: {}", e),
                     true,
-                )
+                );
             }
         };
 
-        log_info(&format!("microsoft: get_profile successful for id={}", graph_profile.id));
+        log_info(&format!(
+            "microsoft: get_profile successful for id={}",
+            graph_profile.id
+        ));
         let profile = ExternalProfile {
             account_id: graph_profile.id,
             display_name: graph_profile.display_name,
