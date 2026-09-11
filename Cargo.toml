@@ -13,3 +13,9 @@ repository = "https://github.com/gamesgamesgamesgamesgames/happyview-plugins"
 [workspace.dependencies]
 serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
+# Sibling checkout of the HappyView repo; switch to the git/crates.io dependency once the SDK is published.
+happyview-plugin-sdk = { path = "../../atproto/happyview/crates/happyview-plugin-sdk" }
+
+[profile.release]
+opt-level = "s"
+lto = true

@@ -43,7 +43,7 @@ jobs:
 
     strategy:
       matrix:
-        plugin: [steam, xbox, microsoft, itch]
+        plugin: [steam, xbox, microsoft, itch, http]
 
     steps:
       - uses: actions/checkout@v4
