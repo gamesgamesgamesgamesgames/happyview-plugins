@@ -3,6 +3,38 @@
 version = 4
 
 [[package]]
+name = "auth-itch"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+]
+
+[[package]]
+name = "auth-microsoft"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+]
+
+[[package]]
+name = "auth-steam"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+]
+
+[[package]]
+name = "auth-xbox"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+]
+
+[[package]]
 name = "happyview-plugin-sdk"
 version = "0.1.0"
 dependencies = [
@@ -11,18 +43,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "http-plugin"
+name = "http"
 version = "0.1.0"
 dependencies = [
  "happyview-plugin-sdk",
-]
-
-[[package]]
-name = "itch-plugin"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -36,14 +60,6 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
-
-[[package]]
-name = "microsoft-plugin"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "proc-macro2"
@@ -107,14 +123,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "steam-plugin"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "syn"
 version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -130,14 +138,6 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
-
-[[package]]
-name = "xbox-plugin"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "zmij"

@@ -1,15 +1,17 @@
 # HappyView Plugins
 
-WASM plugins for [HappyView](https://github.com/gamesgamesgamesgamesgames/happyview) that provide auth and data sync from external platforms.
+WASM plugins for [HappyView](https://github.com/gamesgamesgamesgamesgames/happyview): external-account auth, and libraries that HappyView scripts can call.
 
 ## Available Plugins
 
-| Plugin      | Platform  | Auth Type | Syncs                    |
-| ----------- | --------- | --------- | ------------------------ |
-| `steam`     | Steam     | OpenID    | Games library            |
-| `xbox`      | Xbox      | OAuth2    | Xbox games, achievements |
-| `microsoft` | Microsoft | OAuth2    | Account linking          |
-| `itch`      | itch.io   | OAuth2    | Games library            |
+Auth plugins link an external account to a HappyView user. They authorize, exchange and refresh tokens, and report who the token belongs to; they do not ingest data.
+
+| Plugin             | Platform  | Auth Type | Capabilities                                  |
+| ------------------ | --------- | --------- | --------------------------------------------- |
+| `auth-steam`       | Steam     | OpenID    | `network:request:unrestricted`, `secrets:read` |
+| `auth-xbox`        | Xbox      | OAuth2    | `network:request:unrestricted`, `secrets:read` |
+| `auth-microsoft`   | Microsoft | OAuth2    | `network:request:unrestricted`, `secrets:read` |
+| `auth-itch`        | itch.io   | OAuth2    | `network:request:unrestricted`, `secrets:read` |
 
 ## Library Plugins
 
@@ -85,13 +87,15 @@ fn dispatch(function: &str, args: &[Value], _ctx: &CallContext) -> Result<Value,
 }
 ```
 
-`plugins/http` is this, in full, in about a hundred lines.
+The full `plugins/http` source is about a hundred lines.
 
 The macro emits `alloc`, `dealloc`, `plugin_info`, `get_api_surface` and `call`, plus the bump allocator and the wasm `#[panic_handler]`. Pass `heap = <bytes>` as the first field to size the guest heap; it defaults to 512 KiB. A plugin that exports something other than the library ABI calls `export_abi!()` on its own and writes its exports by hand.
 
+An auth plugin uses `auth_plugin!` instead, which emits `plugin_info` plus the four exports the external-account flow calls — `get_authorize_url`, `handle_callback`, `refresh_tokens` and `get_profile` — each with its own typed input and output (`AuthorizeUrlInput`, `CallbackInput`, `RefreshInput`, `TokenInput`, `TokenSet`, `ExternalProfile`). `CallbackInput::param` reads one callback query parameter, whatever the provider called it, so OAuth 2.0's `code` and OpenID 2.0's `openid.*` keys are read the same way. The four `plugins/auth-*` crates are working examples.
+
 ### Host functions and capabilities
 
-`happyview_plugin_sdk::host` wraps all eleven host imports. Each wrapper's doc comment names the capability the plugin's `manifest.json` must declare, and the HappyView loader refuses a plugin whose wasm imports need more than it declared. The linker drops an import along with the code that would have called it, so an unused wrapper costs nothing — `happyview-plugin-sdk`'s own `tests/exports.rs`, in the HappyView repo, pins that against its own `http`-shaped fixture (not against this repo's `plugins/http` build).
+`happyview_plugin_sdk::host` wraps all eleven host imports. Each wrapper's doc comment names the capability the plugin's `manifest.json` must declare, and the HappyView loader refuses a plugin whose wasm imports need more than it declared. The linker drops an import along with the code that would have called it, so an unused wrapper costs nothing; the SDK's `tests/exports.rs` in the HappyView repo pins that.
 
 | Wrapper | Import | Capability |
 | ------- | ------ | ---------- |
@@ -108,8 +112,8 @@ The macro emits `alloc`, `dealloc`, `plugin_info`, `get_api_surface` and `call`,
 Native builds compile the whole SDK, so a plugin's own logic is testable with `cargo test`; off wasm32 every host wrapper returns `HostError::NotWasm` rather than calling anything. The SDK's own test suite runs in the HappyView repo's CI, not here.
 
 ```bash
-cargo build --release --target wasm32-unknown-unknown -p http-plugin
-cargo clippy --target wasm32-unknown-unknown -p http-plugin -- -D warnings
+cargo build --release --target wasm32-unknown-unknown -p http
+cargo clippy --target wasm32-unknown-unknown -p http -- -D warnings
 ```
 
 ## Installation
@@ -134,21 +138,21 @@ cargo build --release --target wasm32-unknown-unknown
 
 ## Configuration
 
-Each plugin requires environment variables in HappyView with the prefix `PLUGIN_{PLUGIN_ID}_`:
+Each plugin requires environment variables in HappyView with the prefix `PLUGIN_{PLUGIN_ID}_`, the plugin id upper-cased with every non-alphanumeric character replaced by `_`:
 
 ```bash
 # Steam
-PLUGIN_STEAM_API_KEY=your_steam_api_key
+PLUGIN_AUTH_STEAM_API_KEY=your_steam_api_key
 
 # Xbox (Azure AD app with Xbox Live scopes)
-PLUGIN_XBOX_CLIENT_ID=your_azure_client_id
-PLUGIN_XBOX_CLIENT_SECRET=your_azure_client_secret
+PLUGIN_AUTH_XBOX_CLIENT_ID=your_azure_client_id
+PLUGIN_AUTH_XBOX_CLIENT_SECRET=your_azure_client_secret
 
 # Microsoft (can use same Azure app as Xbox)
-PLUGIN_MICROSOFT_CLIENT_ID=your_azure_client_id
-PLUGIN_MICROSOFT_CLIENT_SECRET=your_azure_client_secret
+PLUGIN_AUTH_MICROSOFT_CLIENT_ID=your_azure_client_id
+PLUGIN_AUTH_MICROSOFT_CLIENT_SECRET=your_azure_client_secret
 
 # itch.io
-PLUGIN_ITCH_CLIENT_ID=your_itch_client_id
-PLUGIN_ITCH_CLIENT_SECRET=your_itch_client_secret
+PLUGIN_AUTH_ITCH_CLIENT_ID=your_itch_client_id
+PLUGIN_AUTH_ITCH_CLIENT_SECRET=your_itch_client_secret
 ```
