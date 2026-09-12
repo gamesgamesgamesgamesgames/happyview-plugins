@@ -234,17 +234,17 @@ fn profile(input: &TokenInput) -> Result<ExternalProfile, PluginError> {
 
 fn http_get(url: &str) -> Result<String, String> {
     let response = host::http_request(&HttpRequest::new("GET", url)).map_err(host_error)?;
-    Ok(response.body)
+    Ok(response.text().into_owned())
 }
 
 fn http_post(url: &str, body: &str, content_type: &str) -> Result<String, String> {
     let response = host::http_request(
         &HttpRequest::new("POST", url)
             .header("Content-Type", content_type)
-            .body(body),
+            .body_text(body),
     )
     .map_err(host_error)?;
-    Ok(response.body)
+    Ok(response.text().into_owned())
 }
 
 /// The message reported when a host call returns no response.

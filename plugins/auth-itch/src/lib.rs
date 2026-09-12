@@ -203,10 +203,10 @@ fn http_post(url: &str, body: &str, content_type: &str) -> Result<String, String
     let response = host::http_request(
         &HttpRequest::new("POST", url)
             .header("Content-Type", content_type)
-            .body(body),
+            .body_text(body),
     )
     .map_err(host_error)?;
-    Ok(response.body)
+    Ok(response.text().into_owned())
 }
 
 fn http_get_with_auth(url: &str, token: &str) -> Result<String, String> {
@@ -214,7 +214,7 @@ fn http_get_with_auth(url: &str, token: &str) -> Result<String, String> {
         &HttpRequest::new("GET", url).header("Authorization", format!("Bearer {token}")),
     )
     .map_err(host_error)?;
-    Ok(response.body)
+    Ok(response.text().into_owned())
 }
 
 /// The message reported when a host call returns no response.
