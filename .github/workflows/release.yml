@@ -43,7 +43,7 @@ jobs:
 
     strategy:
       matrix:
-        plugin: [auth-steam, auth-xbox, auth-microsoft, auth-itch, http]
+        plugin: [happyview-auth-steam, happyview-auth-xbox, happyview-auth-microsoft, happyview-auth-itch, happyview-http]
 
     steps:
       - uses: actions/checkout@v4

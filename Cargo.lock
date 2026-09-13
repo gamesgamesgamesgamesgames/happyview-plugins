@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "auth-itch"
+name = "happyview-auth-itch"
 version = "0.1.0"
 dependencies = [
  "happyview-plugin-sdk",
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "auth-microsoft"
+name = "happyview-auth-microsoft"
 version = "0.1.0"
 dependencies = [
  "happyview-plugin-sdk",
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "auth-steam"
+name = "happyview-auth-steam"
 version = "0.1.0"
 dependencies = [
  "happyview-plugin-sdk",
@@ -27,11 +27,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "auth-xbox"
+name = "happyview-auth-xbox"
 version = "0.1.0"
 dependencies = [
  "happyview-plugin-sdk",
  "serde",
+]
+
+[[package]]
+name = "happyview-http"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
 ]
 
 [[package]]
@@ -41,13 +48,6 @@ source = "git+https://github.com/gamesgamesgamesgamesgames/happyview?branch=next
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "http"
-version = "0.1.0"
-dependencies = [
- "happyview-plugin-sdk",
 ]
 
 [[package]]
