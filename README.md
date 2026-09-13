@@ -20,6 +20,9 @@ Library plugins expose functions to HappyView scripts (`require("<namespace>")` 
 | Plugin           | Namespace         | Capabilities                    | Provides                                                   |
 | ---------------- | ----------------- | -------------------------------- | ---------------------------------------------------------- |
 | `happyview-http` | `happyview.http`  | `network:request:unrestricted`  | `get`, `post`, `put`, `patch`, `delete`, `head`            |
+| `happyview-db`   | `happyview.db`    | `records:read`                  | `records(collection)` builder, `get`, `search`, `backend` |
+| `happyview-sql`  | `happyview.sql`   | `database:read`, `database:write` | `from(table)` builder, `raw(sql, params?)`               |
+| `happyview-backlinks` | `happyview.backlinks` | `records:read`              | `to(uri)` builder                                          |
 
 Requires HappyView v3 (plugin API `api_version` `"2"`).
 
@@ -95,7 +98,7 @@ An auth plugin uses `auth_plugin!` instead, which emits `plugin_info` plus the f
 
 ### Host functions and capabilities
 
-`happyview_plugin_sdk::host` wraps all eleven host imports. Each wrapper's doc comment names the capability the plugin's `manifest.json` must declare, and the HappyView loader refuses a plugin whose wasm imports need more than it declared. The linker drops an import along with the code that would have called it, so an unused wrapper costs nothing; the SDK's `tests/exports.rs` in the HappyView repo pins that.
+`happyview_plugin_sdk::host` wraps all seventeen host imports. Each wrapper's doc comment names the capability the plugin's `manifest.json` must declare, and the HappyView loader refuses a plugin whose wasm imports need more than it declared. The linker drops an import along with the code that would have called it, so an unused wrapper costs nothing; the SDK's `tests/exports.rs` in the HappyView repo pins that.
 
 | Wrapper | Import | Capability |
 | ------- | ------ | ---------- |
@@ -106,6 +109,12 @@ An auth plugin uses `auth_plugin!` instead, which emits `plugin_info` plus the f
 | `kv_set` / `kv_delete` | `host_kv_set` / `host_kv_delete` | `kv:write` |
 | `lookup_record` | `host_lookup_record` | `records:read` |
 | `call_library` / `library_surface` | `host_call_library` / `host_get_api_surface` | `library:call` |
+| `records_query` | `host_records_query` | `records:read` |
+| `records_count` | `host_records_count` | `records:read` |
+| `records_get` | `host_records_get` | `records:read` |
+| `records_search` | `host_records_search` | `records:read` |
+| `backlinks_query` | `host_backlinks_query` | `records:read` |
+| `table_query` | `host_table_query` | `database:read` |
 | `db_query` | `host_db_query` | `database:read` or `database:write` |
 | `db_execute` | `host_db_execute` | `database:write` |
 

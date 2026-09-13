@@ -35,6 +35,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "happyview-backlinks"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "happyview-db"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "happyview-http"
 version = "0.1.0"
 dependencies = [
@@ -44,8 +62,17 @@ dependencies = [
 [[package]]
 name = "happyview-plugin-sdk"
 version = "0.1.0"
-source = "git+https://github.com/gamesgamesgamesgamesgames/happyview?branch=next#68d0d188744fd0efcca65d3c84283fe09004edc5"
+source = "git+https://github.com/gamesgamesgamesgamesgames/happyview?branch=next#750e2598f014e3cc133603279123bb4e65d47075"
 dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "happyview-sql"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
  "serde",
  "serde_json",
 ]
