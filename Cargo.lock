@@ -69,6 +69,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "happyview-record"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "happyview-sql"
 version = "0.1.0"
 dependencies = [
