@@ -54,6 +54,7 @@ jobs:
             happyview-sql,
             happyview-backlinks,
             happyview-record,
+            happyview-xrpc,
           ]
 
     steps:

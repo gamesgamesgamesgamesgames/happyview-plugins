@@ -24,6 +24,7 @@ Library plugins expose functions to HappyView scripts (`require("<namespace>")` 
 | `happyview-sql`  | `happyview.sql`   | `database:read`, `database:write` | `from(table)` builder, `raw(sql, params?)`               |
 | `happyview-backlinks` | `happyview.backlinks` | `records:read`              | `to(uri)` builder                                          |
 | `happyview-record` | `happyview.record` | `caller:write`, `records:read`, `records:write` | `create`, `put`, `delete`, `load`, `save_local`, `delete_local`, `validate` |
+| `happyview-xrpc` | `happyview.xrpc` | `caller:read`, `caller:call` | `query(method, params?)`, `procedure(method, input?, params?)` |
 
 Requires HappyView v3 (plugin API `api_version` `"2"`).
 
