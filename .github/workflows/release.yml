@@ -57,6 +57,7 @@ jobs:
             happyview-xrpc,
             happyview-atproto,
             happyview-linked-repos,
+            happyview-jobs,
           ]
 
     steps:

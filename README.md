@@ -27,6 +27,7 @@ Library plugins expose functions to HappyView scripts (`require("<namespace>")` 
 | `happyview-xrpc` | `happyview.xrpc` | `caller:read`, `caller:call` | `query(method, params?)`, `procedure(method, input?, params?)` |
 | `happyview-atproto` | `happyview.atproto` | `atproto:read`, `attest:sign` | `resolve_service_endpoint`, `blob_download`, `get_labels`, `get_labels_batch`, `sign`, `verify_signature` |
 | `happyview-linked-repos` | `happyview.linked_repos` | `linked_repos:use` | `list`, `get(did)` builder: `create_record`, `put_record`, `delete_record`, `upload_blob`, `call` |
+| `happyview-jobs` | `happyview.jobs` | `jobs:create` | `create(job_type, input, opts?)` |
 
 Requires HappyView v3 (plugin API `api_version` `"2"`).
 
