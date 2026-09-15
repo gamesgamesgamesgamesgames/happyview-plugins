@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "happyview-atproto"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "happyview-auth-itch"
 version = "0.1.0"
 dependencies = [
@@ -62,7 +71,7 @@ dependencies = [
 [[package]]
 name = "happyview-plugin-sdk"
 version = "0.1.0"
-source = "git+https://github.com/gamesgamesgamesgamesgames/happyview?branch=next#9983007a9443d28a62c32ab9ba66668c79994b5e"
+source = "git+https://github.com/gamesgamesgamesgamesgames/happyview?branch=next#a358acea0a0009b97c0b9a145e35a09fbbdc36d0"
 dependencies = [
  "serde",
  "serde_json",

@@ -2,8 +2,7 @@
 
 Library plugin exposing `happyview.record`: record writes as the calling
 script's user, direct local-index writes, and lexicon validation. Every
-export is a thin translator over one SDK host wrapper; the host does the
-PDS/database work.
+export is a thin translator over one SDK host wrapper; the host does the work.
 
 ## Lua
 
@@ -13,7 +12,7 @@ local record = require("happyview.record")
 local ref = record.create("app.bsky.feed.post", {text = "hi"})
 record.put(ref.uri, {text = "hi again"}, {validate = false})
 record.delete(ref.uri)
-
+local blob = record.upload_blob(bytes, "image/png")    -- the PDS's blob ref
 local loaded = record.load(ref.uri)                    -- table or nil
 local local_ref = record.save_local("app.bsky.feed.post", "xyz", {text = "hi"})
 record.delete_local(local_ref.uri)
@@ -30,6 +29,8 @@ local normalized = record.validate("app.bsky.feed.post", {text = "hi"})
   unless it matches the record's current CID), `opts.validate` (default
   `true`, as for `create`). Returns `{uri, cid}`.
 - `delete(uri)` — deletes from the user's own repo.
+- `upload_blob(bytes, mime_type)` — `bytes` is a string or byte array;
+  returns the PDS's blob ref, as-is.
 - `load(uri)` — one indexed record, or nil.
 - `save_local(collection, rkey, tbl[, did])` — writes straight into the local
   index, bypassing the PDS. `did` defaults to the calling user; required when
@@ -51,12 +52,11 @@ the required-field check when `opts.validate` is `false`; the other two
 
 ## Errors
 
-- `BAD_INPUT` — malformed arguments (missing/wrong-typed collection, uri, or
-  record; a `save_local` with no `did` and no caller). Raised by this crate
-  before any host call.
+- `BAD_INPUT` — a malformed argument (collection, uri, record, bytes, or a
+  `save_local` with no `did` and no caller), raised before any host call.
 - `INVALID_RECORD` — a required lexicon field is missing, naming which.
-- `NO_SESSION` — this script context has no caller to act as (a label or
-  record-event script calling `create`/`put`/`delete`).
+- `NO_SESSION` — no caller to act as (a label or record-event script calling
+  `create`/`put`/`delete`/`upload_blob`).
 - `AUTH_REQUIRED` / `WRITABLE_REPO` / `PDS_ERROR` — the PDS write failed: no
   valid session, the target repo isn't the caller's, or the PDS rejected it.
 
@@ -68,8 +68,8 @@ first to the user's own repo, the second straight into this instance's
 index, bypassing the network.
 
 Imports exactly `host_caller_create_record`, `host_caller_put_record`,
-`host_caller_delete_record`, `host_records_get`, `host_records_index_put`,
-`host_records_index_delete`, `host_lexicon_get`.
+`host_caller_delete_record`, `host_caller_upload_blob`, `host_records_get`,
+`host_records_index_put`, `host_records_index_delete`, `host_lexicon_get`.
 
 ## Build
 

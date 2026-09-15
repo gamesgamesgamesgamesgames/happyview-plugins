@@ -23,8 +23,9 @@ Library plugins expose functions to HappyView scripts (`require("<namespace>")` 
 | `happyview-db`   | `happyview.db`    | `records:read`                  | `records(collection)` builder, `get`, `search`, `backend` |
 | `happyview-sql`  | `happyview.sql`   | `database:read`, `database:write` | `from(table)` builder, `raw(sql, params?)`               |
 | `happyview-backlinks` | `happyview.backlinks` | `records:read`              | `to(uri)` builder                                          |
-| `happyview-record` | `happyview.record` | `caller:write`, `records:read`, `records:write` | `create`, `put`, `delete`, `load`, `save_local`, `delete_local`, `validate` |
+| `happyview-record` | `happyview.record` | `caller:write`, `records:read`, `records:write` | `create`, `put`, `delete`, `upload_blob`, `load`, `save_local`, `delete_local`, `validate` |
 | `happyview-xrpc` | `happyview.xrpc` | `caller:read`, `caller:call` | `query(method, params?)`, `procedure(method, input?, params?)` |
+| `happyview-atproto` | `happyview.atproto` | `atproto:read`, `attest:sign` | `resolve_service_endpoint`, `blob_download`, `get_labels`, `get_labels_batch`, `sign`, `verify_signature` |
 
 Requires HappyView v3 (plugin API `api_version` `"2"`).
 

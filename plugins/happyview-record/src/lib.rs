@@ -11,10 +11,11 @@ mod validate;
 
 use alloc::format;
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 use happyview_plugin_sdk::host;
 use happyview_plugin_sdk::{
-    json, library_plugin, ApiExport, ApiSurface, CallContext, CallerRecordCreate,
+    json, library_plugin, ApiExport, ApiSurface, CallContext, CallerBlobUpload, CallerRecordCreate,
     CallerRecordDelete, CallerRecordPut, IndexDelete, IndexPut, PluginError, PluginInfo, RecordRef,
     Value,
 };
@@ -48,6 +49,17 @@ fn surface() -> ApiSurface {
             ApiExport::function("delete")
                 .describe("Delete a record from the user's own repo")
                 .param("uri", "string", "AT URI"),
+        )
+        .export(
+            ApiExport::function("upload_blob")
+                .describe("Upload a blob to the user's own repo")
+                .param(
+                    "bytes",
+                    "string",
+                    "Blob content: a string, or an array of byte values",
+                )
+                .param("mime_type", "string", "Blob MIME type")
+                .returns(json!({"type": "object", "description": "The PDS's blob ref, as-is"})),
         )
         .export(
             ApiExport::function("load")
@@ -103,6 +115,7 @@ fn dispatch(function: &str, args: &[Value], ctx: &CallContext) -> Result<Value, 
         "create" => create(args),
         "put" => put(args),
         "delete" => delete(args),
+        "upload_blob" => upload_blob(args),
         "load" => load(args),
         "save_local" => save_local(args, ctx),
         "delete_local" => delete_local(args),
@@ -158,6 +171,12 @@ fn delete(args: &[Value]) -> Result<Value, PluginError> {
     let uri = str_arg(args, 0, "uri")?;
     host::caller_delete_record(&CallerRecordDelete { uri })?;
     Ok(Value::Null)
+}
+
+fn upload_blob(args: &[Value]) -> Result<Value, PluginError> {
+    let bytes = bytes_arg(args, 0)?;
+    let mime_type = str_arg(args, 1, "mime_type")?;
+    host::caller_upload_blob(&CallerBlobUpload { bytes, mime_type })
 }
 
 fn load(args: &[Value]) -> Result<Value, PluginError> {
@@ -217,6 +236,30 @@ fn str_arg(args: &[Value], index: usize, name: &str) -> Result<String, PluginErr
         .ok_or_else(|| PluginError::bad_input(format!("{name} is required")))
 }
 
+/// The wire type accepts `bytes` as a JSON string (UTF-8 content) or an array
+/// of byte values; this mirrors that here, ahead of the host call, so a
+/// malformed blob body fails fast with a script-actionable message rather
+/// than a `serde` error surfaced through `HOST_ERROR`.
+fn bytes_arg(args: &[Value], index: usize) -> Result<Vec<u8>, PluginError> {
+    match args.get(index) {
+        Some(Value::String(text)) => Ok(text.clone().into_bytes()),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.as_u64()
+                    .filter(|n| *n <= u8::MAX as u64)
+                    .map(|n| n as u8)
+                    .ok_or_else(|| {
+                        PluginError::bad_input("bytes must be an array of byte values (0-255)")
+                    })
+            })
+            .collect(),
+        _ => Err(PluginError::bad_input(
+            "bytes is required and must be a string or an array of bytes",
+        )),
+    }
+}
+
 fn record_arg(args: &[Value], index: usize) -> Result<Value, PluginError> {
     match args.get(index) {
         Some(Value::Object(map)) => Ok(Value::Object(map.clone())),
@@ -255,6 +298,8 @@ fn collection_from_uri(uri: &str) -> Result<String, PluginError> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[test]
@@ -274,6 +319,39 @@ mod tests {
     fn record_arg_rejects_a_non_object() {
         let args = [Value::Null, json!("not an object")];
         let err = record_arg(&args, 1).unwrap_err();
+        assert_eq!(err.code, "BAD_INPUT");
+    }
+
+    #[test]
+    fn bytes_arg_reads_a_utf8_string() {
+        let args = [json!("hello")];
+        assert_eq!(bytes_arg(&args, 0).unwrap(), b"hello".to_vec());
+    }
+
+    #[test]
+    fn bytes_arg_reads_a_byte_array() {
+        let args = [json!([0, 159, 146, 150])];
+        assert_eq!(bytes_arg(&args, 0).unwrap(), vec![0, 159, 146, 150]);
+    }
+
+    #[test]
+    fn bytes_arg_rejects_a_missing_value() {
+        let args: [Value; 0] = [];
+        let err = bytes_arg(&args, 0).unwrap_err();
+        assert_eq!(err.code, "BAD_INPUT");
+    }
+
+    #[test]
+    fn bytes_arg_rejects_a_non_string_non_array() {
+        let args = [json!(42)];
+        let err = bytes_arg(&args, 0).unwrap_err();
+        assert_eq!(err.code, "BAD_INPUT");
+    }
+
+    #[test]
+    fn bytes_arg_rejects_an_out_of_range_byte_value() {
+        let args = [json!([1, 2, 300])];
+        let err = bytes_arg(&args, 0).unwrap_err();
         assert_eq!(err.code, "BAD_INPUT");
     }
 
