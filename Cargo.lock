@@ -89,7 +89,7 @@ dependencies = [
 [[package]]
 name = "happyview-plugin-sdk"
 version = "0.1.0"
-source = "git+https://github.com/gamesgamesgamesgamesgames/happyview?branch=next#f2a030f7e331bdb6f01c20d047a3d1eabf171aa5"
+source = "git+https://github.com/gamesgamesgamesgamesgames/happyview?branch=next#ccd5d3d4eb46ec5efa498346c5758845c2bb5e46"
 dependencies = [
  "serde",
  "serde_json",
@@ -97,6 +97,15 @@ dependencies = [
 
 [[package]]
 name = "happyview-record"
+version = "0.1.0"
+dependencies = [
+ "happyview-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "happyview-spaces"
 version = "0.1.0"
 dependencies = [
  "happyview-plugin-sdk",
