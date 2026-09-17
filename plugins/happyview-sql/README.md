@@ -37,6 +37,9 @@ backend). A number or boolean value binds typed against the column; a string
 binds as text. Repeated `where` steps combine with `AND`. `sort` direction
 defaults to `desc`; `limit` defaults to 20 and caps at 100.
 
+A lazy step given `nil` is skipped, so `:limit(input.limit)` reads as no
+limit when the input has none.
+
 `table` in `from` and every table name in `raw` must be a bare identifier:
 letters, digits and underscores, starting with a letter or underscore. This
 is the same rule Lua's `db.raw` enforces, and it exists to make table names

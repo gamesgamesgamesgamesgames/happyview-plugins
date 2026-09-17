@@ -54,6 +54,13 @@ pub fn fold(call: &ObjectCall) -> Result<TableChain, PluginError> {
     for step in &call.steps {
         let name = step.name.as_str();
         let args = &step.args;
+        // a step whose first argument is absent or nil reads as "not called", so
+        // `:limit(input.limit)` is no limit when the input carries none
+        if matches!(name, "where" | "sort" | "limit")
+            && matches!(args.first(), None | Some(Value::Null))
+        {
+            continue;
+        }
         match name {
             "where" => {
                 let field = string_arg(name, args, 0, "field")?;
@@ -172,6 +179,68 @@ mod tests {
     fn count_sets_the_flag() {
         let q = to_table_query(&fold(&doc(vec![], "count")).unwrap(), true);
         assert!(q.count);
+    }
+
+    #[test]
+    fn nil_limit_is_dropped_from_the_chain() {
+        for args in [vec![], vec![json!(null)]] {
+            let chain = fold(&doc(
+                vec![Step {
+                    name: "limit".into(),
+                    args,
+                }],
+                "run",
+            ))
+            .unwrap();
+            assert_eq!(chain.limit, None);
+        }
+    }
+
+    #[test]
+    fn present_limit_still_validates() {
+        let err = fold(&doc(
+            vec![Step {
+                name: "limit".into(),
+                args: vec![json!("ten")],
+            }],
+            "run",
+        ))
+        .unwrap_err();
+        assert_eq!(err.code, "BAD_CHAIN");
+        assert!(err.message.contains("limit"));
+    }
+
+    #[test]
+    fn two_nil_steps_in_a_row_are_both_dropped() {
+        let chain = fold(&doc(
+            vec![
+                Step {
+                    name: "where".into(),
+                    args: vec![json!(null)],
+                },
+                Step {
+                    name: "limit".into(),
+                    args: vec![],
+                },
+            ],
+            "run",
+        ))
+        .unwrap();
+        assert!(chain.conditions.is_empty());
+        assert_eq!(chain.limit, None);
+    }
+
+    #[test]
+    fn nil_sort_is_dropped() {
+        let chain = fold(&doc(
+            vec![Step {
+                name: "sort".into(),
+                args: vec![json!(null)],
+            }],
+            "run",
+        ))
+        .unwrap();
+        assert!(chain.sort.is_none());
     }
 
     #[test]

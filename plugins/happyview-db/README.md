@@ -47,6 +47,9 @@ Pagination depends on `sort`: the default sort paginates by a `(created_at,
 uri)` keyset cursor; a custom `sort` paginates by offset cursor instead.
 Both move opaquely through `cursor()`.
 
+A lazy step given `nil` is skipped, so `:limit(input.limit)` reads as no
+limit when the input has none.
+
 ## Errors
 
 - `BAD_CHAIN` — the object document itself is malformed (unknown step,

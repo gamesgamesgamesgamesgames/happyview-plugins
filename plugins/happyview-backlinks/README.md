@@ -39,6 +39,11 @@ local next_page = backlinks
   host. `cursor` continues a prior page; a page with no `cursor` in its
   result is the last one.
 
+A lazy step given `nil` is skipped, so `:limit(input.limit)` reads as no
+limit when the input has none. A `nil` `collection` is skipped the same
+way, so it still resolves to the required-`collection` error rather than a
+`BAD_CHAIN` about the step's argument type.
+
 ## Errors
 
 - `BAD_INPUT` — `to()` was called with no URI.

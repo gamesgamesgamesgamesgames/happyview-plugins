@@ -75,6 +75,13 @@ fn fold(call: &ObjectCall) -> Result<BacklinksQuery, PluginError> {
     for step in &call.steps {
         let name = step.name.as_str();
         let args = &step.args;
+        // a step whose first argument is absent or nil reads as "not called", so
+        // `:limit(input.limit)` is no limit when the input carries none
+        if matches!(name, "collection" | "did" | "limit" | "cursor")
+            && matches!(args.first(), None | Some(Value::Null))
+        {
+            continue;
+        }
         match name {
             "collection" => collection = Some(string_arg(name, args, 0, "collection")?),
             "did" => did = Some(string_arg(name, args, 0, "did")?),
@@ -151,6 +158,84 @@ mod tests {
                 args: vec![],
             },
         };
+        let err = fold(&call).unwrap_err();
+        assert_eq!(err.code, "BAD_CHAIN");
+        assert!(err.message.contains("collection"));
+    }
+
+    fn doc(steps: Vec<Step>) -> ObjectCall {
+        ObjectCall {
+            args: vec![json!("at://a/c/1")],
+            steps,
+            call: MethodCall {
+                name: "run".into(),
+                args: vec![],
+            },
+        }
+    }
+
+    #[test]
+    fn nil_limit_is_dropped_from_the_chain() {
+        for args in [vec![], vec![json!(null)]] {
+            let call = doc(vec![
+                Step {
+                    name: "collection".into(),
+                    args: vec![json!("app.bsky.feed.like")],
+                },
+                Step {
+                    name: "limit".into(),
+                    args,
+                },
+            ]);
+            let q = fold(&call).unwrap();
+            assert_eq!(q.limit, None);
+        }
+    }
+
+    #[test]
+    fn present_limit_still_validates() {
+        let call = doc(vec![
+            Step {
+                name: "collection".into(),
+                args: vec![json!("app.bsky.feed.like")],
+            },
+            Step {
+                name: "limit".into(),
+                args: vec![json!("ten")],
+            },
+        ]);
+        let err = fold(&call).unwrap_err();
+        assert_eq!(err.code, "BAD_CHAIN");
+        assert!(err.message.contains("limit"));
+    }
+
+    #[test]
+    fn two_nil_steps_in_a_row_are_both_dropped() {
+        let call = doc(vec![
+            Step {
+                name: "collection".into(),
+                args: vec![json!("app.bsky.feed.like")],
+            },
+            Step {
+                name: "did".into(),
+                args: vec![json!(null)],
+            },
+            Step {
+                name: "cursor".into(),
+                args: vec![],
+            },
+        ]);
+        let q = fold(&call).unwrap();
+        assert!(q.did.is_none());
+        assert!(q.cursor.is_none());
+    }
+
+    #[test]
+    fn nil_collection_leaves_it_missing() {
+        let call = doc(vec![Step {
+            name: "collection".into(),
+            args: vec![json!(null)],
+        }]);
         let err = fold(&call).unwrap_err();
         assert_eq!(err.code, "BAD_CHAIN");
         assert!(err.message.contains("collection"));

@@ -60,6 +60,13 @@ pub fn fold(call: &ObjectCall) -> Result<RecordsChain, PluginError> {
     for step in &call.steps {
         let name = step.name.as_str();
         let args = &step.args;
+        // a step whose first argument is absent or nil reads as "not called", so
+        // `:limit(input.limit)` is no limit when the input carries none
+        if matches!(name, "where" | "sort" | "limit" | "cursor" | "did")
+            && matches!(args.first(), None | Some(Value::Null))
+        {
+            continue;
+        }
         match name {
             "where" => {
                 let field = string_arg(name, args, 0, "field")?;
@@ -241,6 +248,48 @@ mod tests {
             assert_eq!(err.code, "BAD_CHAIN");
             assert!(err.message.contains(needle), "{}", err.message);
         }
+    }
+
+    #[test]
+    fn nil_limit_is_dropped_from_the_chain() {
+        for args in [vec![], vec![json!(null)]] {
+            let chain = fold(&doc(vec![step("limit", args)], "run")).unwrap();
+            assert_eq!(chain.limit, None);
+        }
+    }
+
+    #[test]
+    fn present_limit_still_validates() {
+        let err = fold(&doc(vec![step("limit", vec![json!("ten")])], "run")).unwrap_err();
+        assert_eq!(err.code, "BAD_CHAIN");
+        assert!(err.message.contains("limit"));
+    }
+
+    #[test]
+    fn two_nil_steps_in_a_row_are_both_dropped() {
+        let chain = fold(&doc(
+            vec![step("where", vec![json!(null)]), step("limit", vec![])],
+            "run",
+        ))
+        .unwrap();
+        assert!(chain.conditions.is_empty());
+        assert_eq!(chain.limit, None);
+    }
+
+    #[test]
+    fn nil_sort_cursor_and_did_are_dropped() {
+        let chain = fold(&doc(
+            vec![
+                step("sort", vec![json!(null)]),
+                step("cursor", vec![]),
+                step("did", vec![json!(null)]),
+            ],
+            "run",
+        ))
+        .unwrap();
+        assert!(chain.sort.is_none());
+        assert!(chain.cursor.is_none());
+        assert!(chain.did.is_none());
     }
 
     #[test]
