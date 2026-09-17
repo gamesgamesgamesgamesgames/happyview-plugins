@@ -18,8 +18,8 @@ local page = backlinks
   :limit(20)
   :run()
 
-for _, record in ipairs(page.records) do
-  -- record is the liking record, not the post it points at
+for _, row in ipairs(page.records) do
+  -- row.record is the liking record, not the post it points at
 end
 
 local next_page = backlinks
@@ -38,6 +38,18 @@ local next_page = backlinks
 - `did` narrows to backlinks authored by one repo. `limit` is capped by the
   host. `cursor` continues a prior page; a page with no `cursor` in its
   result is the last one.
+
+Each entry of `records` is an envelope:
+
+```lua
+{uri, did, collection, rkey, cid, indexed_at, record}
+```
+
+`record` is the referencing record's stored body verbatim. `cid` is nil
+while the row holds no CID (a `save_local` write) and `indexed_at` is nil
+until the network has echoed the record; a record written through
+`happyview.record` is in the index at once, with the PDS's `cid` and no
+`indexed_at`.
 
 A lazy step given `nil` is skipped, so `:limit(input.limit)` reads as no
 limit when the input has none. A `nil` `collection` is skipped the same

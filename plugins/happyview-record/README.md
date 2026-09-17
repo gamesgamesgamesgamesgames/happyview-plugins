@@ -13,7 +13,7 @@ local ref = record.create("app.bsky.feed.post", {text = "hi"})
 record.put(ref.uri, {text = "hi again"}, {validate = false})
 record.delete(ref.uri)
 local blob = record.upload_blob(bytes, "image/png")    -- the PDS's blob ref
-local loaded = record.load(ref.uri)                    -- table or nil
+local loaded = record.load(ref.uri)                    -- envelope or nil
 local local_ref = record.save_local("app.bsky.feed.post", "xyz", {text = "hi"})
 record.delete_local(local_ref.uri)
 
@@ -46,6 +46,24 @@ local lexicon = record.lexicon("app.bsky.feed.post")   -- table or nil
   are what `validate` reads).
 
 There is no `generate_rkey`: use `require("internal.tids").create()`.
+
+## Reads and the local index
+
+`load` returns an envelope:
+
+```lua
+{uri, did, collection, rkey, cid, indexed_at, record}
+```
+
+`record` is the stored body verbatim, so a body with its own `uri` field
+keeps it.
+
+`create`, `put` and `delete` mirror into the local index as soon as the PDS
+accepts them, so a script sees its own write on its next `load` (or any
+`happyview.db` read): `create` and `put` upsert the row with the PDS's
+`cid`, and `delete` removes it. `indexed_at` stays nil until the network
+echoes the record. A `save_local` row has neither `cid` nor `indexed_at`
+until then. A mirror failure is logged and does not fail the write.
 
 ## `$type` and defaults
 

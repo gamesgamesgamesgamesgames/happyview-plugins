@@ -67,7 +67,7 @@ fn surface() -> ApiSurface {
                 .param("uri", "string", "AT URI")
                 .returns(json!({
                     "type": "object?",
-                    "description": "The stored record body with a uri field set to the record's own AT URI"
+                    "description": "The record envelope: uri, did, collection, rkey, cid, indexed_at and the stored body under record; a PDS write carries its cid at once, indexed_at stays null until the network echoes the record, and a save_local row has neither"
                 })),
         )
         .export(
@@ -220,7 +220,7 @@ fn save_local(args: &[Value], ctx: &CallContext) -> Result<Value, PluginError> {
         did: Some(did),
         record,
         // A local-only save never round-tripped through a PDS, so it has no
-        // CID to offer; the index computes one.
+        // CID to offer; the row carries none until the network echoes it.
         cid: None,
     })?;
     Ok(record_ref_value(result))
