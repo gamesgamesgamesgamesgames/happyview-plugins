@@ -64,7 +64,11 @@ fn surface() -> ApiSurface {
         .export(
             ApiExport::function("load")
                 .describe("One indexed record by AT URI, or null")
-                .param("uri", "string", "AT URI"),
+                .param("uri", "string", "AT URI")
+                .returns(json!({
+                    "type": "object?",
+                    "description": "The stored record body with a uri field set to the record's own AT URI"
+                })),
         )
         .export(
             ApiExport::function("save_local")
@@ -85,6 +89,15 @@ fn surface() -> ApiSurface {
                 .describe("Normalize a record against its lexicon and check required fields")
                 .param("collection", "string", "Lexicon collection NSID")
                 .param("record", "object", "Record body"),
+        )
+        .export(
+            ApiExport::function("lexicon")
+                .describe("The lexicon document this instance holds for a collection, or null")
+                .param("collection", "string", "Lexicon collection NSID")
+                .returns(json!({
+                    "type": "object?",
+                    "description": "The stored lexicon document as uploaded; a record schema sits at defs.main.record"
+                })),
         )
 }
 
@@ -120,6 +133,7 @@ fn dispatch(function: &str, args: &[Value], ctx: &CallContext) -> Result<Value, 
         "save_local" => save_local(args, ctx),
         "delete_local" => delete_local(args),
         "validate" => validate_record(args),
+        "lexicon" => lexicon(args),
         other => Err(PluginError::unknown_function(other)),
     }
 }
@@ -223,6 +237,17 @@ fn validate_record(args: &[Value]) -> Result<Value, PluginError> {
     let record = record_arg(args, 1)?;
     let lexicon = host::lexicon_get(&collection)?.unwrap_or(Value::Null);
     validate::normalize(&lexicon, &collection, record, false)
+}
+
+fn lexicon(args: &[Value]) -> Result<Value, PluginError> {
+    let collection = str_arg(args, 0, "collection")?;
+    Ok(lexicon_document(host::lexicon_get(&collection)?))
+}
+
+/// A collection with no lexicon answers `null`, which Lua reads as `nil`, so
+/// a script tests for it with `== nil` rather than for an error.
+fn lexicon_document(found: Option<Value>) -> Value {
+    found.unwrap_or(Value::Null)
 }
 
 fn record_ref_value(record_ref: RecordRef) -> Value {
@@ -377,6 +402,28 @@ mod tests {
     fn opts_arg_rejects_a_non_object() {
         let args = [json!("not an object")];
         let err = opts_arg(&args, 0).unwrap_err();
+        assert_eq!(err.code, "BAD_INPUT");
+    }
+
+    #[test]
+    fn lexicon_document_hands_back_the_document_found() {
+        let document = json!({
+            "lexicon": 1,
+            "id": "app.test.thing",
+            "defs": {"main": {"type": "record", "key": "tid", "record": {"properties": {}}}}
+        });
+        assert_eq!(lexicon_document(Some(document.clone())), document);
+    }
+
+    #[test]
+    fn lexicon_document_is_null_when_none_is_registered() {
+        assert_eq!(lexicon_document(None), Value::Null);
+    }
+
+    #[test]
+    fn lexicon_rejects_a_missing_collection() {
+        let args: [Value; 0] = [];
+        let err = lexicon(&args).unwrap_err();
         assert_eq!(err.code, "BAD_INPUT");
     }
 

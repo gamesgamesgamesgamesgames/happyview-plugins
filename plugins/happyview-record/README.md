@@ -18,6 +18,7 @@ local local_ref = record.save_local("app.bsky.feed.post", "xyz", {text = "hi"})
 record.delete_local(local_ref.uri)
 
 local normalized = record.validate("app.bsky.feed.post", {text = "hi"})
+local lexicon = record.lexicon("app.bsky.feed.post")   -- table or nil
 ```
 
 ## Surface
@@ -39,6 +40,10 @@ local normalized = record.validate("app.bsky.feed.post", {text = "hi"})
   was actually there.
 - `validate(collection, tbl)` — normalizes and checks a record without
   writing anywhere.
+- `lexicon(collection)` — the lexicon document this instance holds for the
+  collection, exactly as uploaded, or nil when none is registered. A record
+  schema sits at `defs.main.record` (its `key`, `required` and `properties`
+  are what `validate` reads).
 
 There is no `generate_rkey`: use `require("internal.tids").create()`.
 
