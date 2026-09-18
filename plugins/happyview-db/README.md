@@ -9,19 +9,22 @@ import; the host generates the SQL and owns the schema.
 ```lua
 local db = require("happyview.db")
 
-local page = db.records("app.bsky.feed.post")
-  :where("author", "=", caller_did)
-  :where("text", "like", "%happyview%")
-  :sort("createdAt", "desc")
-  :limit(20)
-  :run()
+function handle(input, ctx)
+  local page = db.records("app.bsky.feed.post")
+    :where("author", "=", ctx.caller_did)
+    :where("text", "like", "%happyview%")
+    :sort("createdAt", "desc")
+    :limit(20)
+    :run()
 
-for _, row in ipairs(page.records) do
-  print(row.uri, row.record.text)
+  for _, row in ipairs(page.records) do
+    print(row.uri, row.record.text)
+  end
+
+  local total = db.records("app.bsky.feed.post"):where("author", "=", ctx.caller_did):count()
+  local newest = db.records("app.bsky.feed.post"):sort("createdAt", "desc"):first()
+  return {total = total, newest = newest}
 end
-
-local total = db.records("app.bsky.feed.post"):where("author", "=", caller_did):count()
-local newest = db.records("app.bsky.feed.post"):sort("createdAt", "desc"):first()
 
 local one = db.get("at://did:plc:abc/app.bsky.feed.post/xyz") -- envelope or nil
 local hits = db.search("app.bsky.feed.post", "text", "happyview", 10)

@@ -9,8 +9,11 @@ the host validates the job type and enqueues the row.
 ```lua
 local jobs = require("happyview.jobs")
 
-local id = jobs.create("app.example.reindex", {collection = "app.bsky.feed.post"})
-local id_with_auth = jobs.create("app.example.sync", {did = caller_did}, {auth = true})
+function handle(input, ctx)
+  local id = jobs.create("app.example.reindex", {collection = "app.bsky.feed.post"})
+  local id_with_auth = jobs.create("app.example.sync", {did = ctx.caller_did}, {auth = true})
+  return {id = id, id_with_auth = id_with_auth}
+end
 ```
 
 ## Surface
@@ -30,8 +33,9 @@ any script context, and has no view into a job once it exists.
 - `BAD_INPUT` — a missing `job_type`, a non-table `opts`, a `job_type`
   starting with the reserved `happyview.` prefix (native job types; only
   internal Rust callers may enqueue them), or no caller to enqueue as (a
-  label or record-event script, or an unauthenticated request) — checked
-  before `opts.auth` even matters.
+  label script or an unauthenticated request; a record-event script acts as
+  the record's author, so it can enqueue) — checked before `opts.auth` even
+  matters.
 - `NO_SESSION` — `opts.auth` is set, there is a caller, but its script
   context has no DPoP session to carry (a cookie-authenticated runner).
 - `FORBIDDEN` — the plugin lacks `jobs:create`.

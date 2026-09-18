@@ -7,14 +7,17 @@ host wrapper each; the host builds the request and owns the credentials.
 ## Lua
 
 ```lua
+local time = require("internal.time")
 local xrpc = require("happyview.xrpc")
 
-local profile = xrpc.query("app.bsky.actor.getProfile", {actor = "alice.test"})
-local result = xrpc.procedure("com.atproto.repo.createRecord", {
-  repo = caller_did,
-  collection = "app.bsky.feed.like",
-  record = {subject = subject_ref, createdAt = now},
-})
+function handle(input, ctx)
+  local profile = xrpc.query("app.bsky.actor.getProfile", {actor = "alice.test"})
+  return xrpc.procedure("com.atproto.repo.createRecord", {
+    repo = ctx.caller_did,
+    collection = "app.bsky.feed.like",
+    record = {subject = input.subject, createdAt = time.to_iso8601(time.now())},
+  })
+end
 ```
 
 ## Surface
