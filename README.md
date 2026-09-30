@@ -32,6 +32,24 @@ Library plugins expose functions to HappyView scripts (`require("<namespace>")` 
 
 Requires HappyView v3 (plugin API `api_version` `"2"`).
 
+## Interpreter Plugins
+
+An interpreter plugin is what runs a script at all, so a script's language is
+an install rather than a release. It declares the language id that
+`scripts.script_type` stores, exports `execute` and `validate` instead of
+`call`, and bridges whatever libraries are installed rather than depending on
+any.
+
+| Plugin | Language | Capabilities | Target |
+| --- | --- | --- | --- |
+| `happyview-lua` | `lua` (PUC Lua 5.4.8) | `library:call`, `script:host`, `wasi:clock`, `wasi:random`, `wasi:stdio` | `wasm32-wasip1` |
+
+It is the only member of this workspace that is not pure Rust on
+`wasm32-unknown-unknown`: it vendors PUC Lua, which is compiled with clang
+from wasi-sdk 34.0, so it is kept out of the workspace's default member set and
+has a CI job of its own. `plugins/happyview-lua/README.md` has the contract it
+gives a script and the environment it needs to build.
+
 ## Writing a plugin with the SDK
 
 `happyview-plugin-sdk` owns everything between a plugin and the host: the guest allocator, the packed-`i64` calling convention, the JSON envelope, and the `env` host imports. A plugin crate needs no `extern "C"` block, no raw pointers, and no `#[global_allocator]` — `library_plugin!` emits all of it, in the plugin crate, where the wasm linker reliably keeps the exports.

@@ -3,6 +3,26 @@ resolver = "2"
 members = [
     "plugins/*",
 ]
+# `happyview-lua` vendors PUC Lua, which compiles only for a target its C
+# toolchain knows, so it is the one member that is not a pure-Rust
+# `wasm32-unknown-unknown` plugin. Keeping it out of the default set leaves a
+# bare workspace build building the members that share one target.
+default-members = [
+    "plugins/happyview-atproto",
+    "plugins/happyview-auth-itch",
+    "plugins/happyview-auth-microsoft",
+    "plugins/happyview-auth-steam",
+    "plugins/happyview-auth-xbox",
+    "plugins/happyview-backlinks",
+    "plugins/happyview-db",
+    "plugins/happyview-http",
+    "plugins/happyview-jobs",
+    "plugins/happyview-linked-repos",
+    "plugins/happyview-record",
+    "plugins/happyview-spaces",
+    "plugins/happyview-sql",
+    "plugins/happyview-xrpc",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -16,6 +36,16 @@ serde_json = { version = "1", default-features = false, features = ["alloc"] }
 # The SDK is not published; it is pulled from HappyView's `next` branch until it is.
 happyview-plugin-sdk = { git = "https://github.com/gamesgamesgamesgamesgames/happyview", branch = "next" }
 
+# The interpreter ABI this repo's Lua plugin is built against lives in
+# HappyView's working tree and not yet on `next`, the branch above. It comes
+# out when the ABI lands there; until then this path is what resolves, and it
+# resolves only in a checkout laid out beside HappyView's.
+[patch."https://github.com/gamesgamesgamesgamesgames/happyview"]
+happyview-plugin-sdk = { path = "../../atproto/happyview/crates/happyview-plugin-sdk" }
+
 [profile.release]
 opt-level = "s"
 lto = true
+# A guest has no unwinder, and an interpreter's panic is a fault the host
+# reads as a trap rather than something a plugin recovers from.
+panic = "abort"
