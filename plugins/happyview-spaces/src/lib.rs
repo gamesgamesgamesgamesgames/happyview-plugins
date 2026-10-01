@@ -77,6 +77,7 @@ fn surface() -> ApiSurface {
                 .immediate("delete_record")
                 .immediate("add_member")
                 .immediate("set_member")
+                .immediate("put_member")
                 .immediate("remove_member")
                 .immediate("update")
                 .immediate("delete")
@@ -214,7 +215,10 @@ fn get(call: &ObjectCall) -> Result<Value, PluginError> {
         "put_record" => put_record(&uri, method_args),
         "delete_record" => delete_record(&uri, method_args),
         "add_member" => add_member(&uri, method_args),
-        "set_member" => set_member(&uri, method_args),
+        // `put_member` is what the upsert is called on the HTTP surface and
+        // in scripts written against it, and the codemod renames no handle
+        // method but `query`.
+        "set_member" | "put_member" => set_member(&uri, method_args),
         "remove_member" => remove_member(&uri, method_args),
         "update" => update(&uri, method_args),
         "delete" => delete_space(&uri),
@@ -284,15 +288,22 @@ fn set_member(uri: &str, args: &[Value]) -> Result<Value, PluginError> {
     Ok(member_value(result))
 }
 
+/// Access is named either as `read`/`write` or as the `access` word; the
+/// host refuses half a pair and refuses a pair beside a word, so neither
+/// rule is restated here.
 fn member_add_spec(uri: &str, args: &[Value]) -> Result<SpaceMemberAdd, PluginError> {
     let table = table_arg(args, 0)?;
     let did = required_str_field(table, "did")?;
     let access = optional_str_field(table, "access");
+    let read = optional_bool_field(table, "read");
+    let write = optional_bool_field(table, "write");
     let is_delegation = optional_bool_field(table, "is_delegation");
     Ok(SpaceMemberAdd {
         uri: uri.to_string(),
         did,
         access,
+        read,
+        write,
         is_delegation,
     })
 }
@@ -332,20 +343,24 @@ fn delete_space(uri: &str) -> Result<Value, PluginError> {
     Ok(Value::Bool(true))
 }
 
+/// Access follows `member_add_spec`'s rule.
 fn create_invite(uri: &str, args: &[Value]) -> Result<Value, PluginError> {
+    let spec = invite_create_spec(uri, args)?;
+    let result = host::spaces_create_invite(&spec)?;
+    Ok(invite_value(result))
+}
+
+fn invite_create_spec(uri: &str, args: &[Value]) -> Result<SpaceInviteCreate, PluginError> {
     let map = object_or_empty(args, 0)?;
     let table = Value::Object(map);
-    let access = optional_str_field(&table, "access");
-    let max_uses = optional_i64_field(&table, "max_uses");
-    let expires_at = optional_str_field(&table, "expires_at");
-
-    let result = host::spaces_create_invite(&SpaceInviteCreate {
+    Ok(SpaceInviteCreate {
         uri: uri.to_string(),
-        access,
-        max_uses,
-        expires_at,
-    })?;
-    Ok(invite_value(result))
+        access: optional_str_field(&table, "access"),
+        read: optional_bool_field(&table, "read"),
+        write: optional_bool_field(&table, "write"),
+        max_uses: optional_i64_field(&table, "max_uses"),
+        expires_at: optional_str_field(&table, "expires_at"),
+    })
 }
 
 fn members(uri: &str) -> Result<Value, PluginError> {
@@ -412,8 +427,16 @@ fn space_value(space: SpaceInfo) -> Value {
     })
 }
 
+/// `read` and `write` are the member's actual pair; `access` is the nearest
+/// word for it, which cannot distinguish a write-only member from a
+/// read/write one.
 fn member_value(member: SpaceMemberInfo) -> Value {
-    json!({"did": member.did, "access": member.access})
+    json!({
+        "did": member.did,
+        "access": member.access,
+        "read": member.read,
+        "write": member.write,
+    })
 }
 
 fn invite_value(invite: SpaceInviteInfo) -> Value {
@@ -421,6 +444,8 @@ fn invite_value(invite: SpaceInviteInfo) -> Value {
         "invite_id": invite.invite_id,
         "token": invite.token,
         "access": invite.access,
+        "read": invite.read,
+        "write": invite.write,
         "max_uses": invite.max_uses,
         "expires_at": invite.expires_at,
     })
@@ -757,7 +782,95 @@ mod tests {
         assert_eq!(spec.uri, "at://did:plc:xyz/space/t/s");
         assert_eq!(spec.did, "did:plc:abc");
         assert_eq!(spec.access, Some("write".to_string()));
+        assert_eq!(spec.read, None);
+        assert_eq!(spec.write, None);
         assert_eq!(spec.is_delegation, None);
+    }
+
+    /// The pair the `access` word cannot name, which is why it is carried
+    /// separately at all.
+    #[test]
+    fn member_add_spec_carries_a_write_only_pair() {
+        let args = [json!({"did": "did:plc:abc", "read": false, "write": true})];
+        let spec = member_add_spec("at://did:plc:xyz/space/t/s", &args).unwrap();
+        assert_eq!(spec.access, None);
+        assert_eq!(spec.read, Some(false));
+        assert_eq!(spec.write, Some(true));
+    }
+
+    #[test]
+    fn invite_create_spec_carries_a_write_only_pair() {
+        let args = [json!({"read": false, "write": true, "max_uses": 3})];
+        let spec = invite_create_spec("at://did:plc:xyz/space/t/s", &args).unwrap();
+        assert_eq!(spec.uri, "at://did:plc:xyz/space/t/s");
+        assert_eq!(spec.access, None);
+        assert_eq!(spec.read, Some(false));
+        assert_eq!(spec.write, Some(true));
+        assert_eq!(spec.max_uses, Some(3));
+    }
+
+    #[test]
+    fn invite_create_spec_reads_the_access_word() {
+        let args = [json!({"access": "read"})];
+        let spec = invite_create_spec("at://did:plc:xyz/space/t/s", &args).unwrap();
+        assert_eq!(spec.access, Some("read".to_string()));
+        assert_eq!(spec.read, None);
+        assert_eq!(spec.write, None);
+    }
+
+    #[test]
+    fn member_value_carries_the_pair_beside_the_word() {
+        let value = member_value(SpaceMemberInfo {
+            did: "did:plc:abc".to_string(),
+            access: "write".to_string(),
+            read: false,
+            write: true,
+        });
+        assert_eq!(value["read"], json!(false));
+        assert_eq!(value["write"], json!(true));
+        assert_eq!(value["access"], json!("write"));
+    }
+
+    #[test]
+    fn invite_value_carries_the_pair_beside_the_word() {
+        let value = invite_value(SpaceInviteInfo {
+            invite_id: "inv-1".to_string(),
+            token: "tok".to_string(),
+            access: "write".to_string(),
+            read: false,
+            write: true,
+            max_uses: None,
+            expires_at: None,
+        });
+        assert_eq!(value["read"], json!(false));
+        assert_eq!(value["write"], json!(true));
+    }
+
+    /// `put_member` and `set_member` are the same method under two names, so
+    /// neither may be the one that reaches `unknown_function`. Off wasm there
+    /// is no host to call, so both stop at the same `HOST_ERROR` — which an
+    /// unrouted name never reaches.
+    #[test]
+    fn put_member_and_set_member_dispatch_alike() {
+        let call_named = |name: &str| {
+            get(&ObjectCall {
+                args: vec![json!("at://did:plc:abc/space/x/y")],
+                steps: vec![],
+                call: happyview_plugin_sdk::MethodCall {
+                    name: name.to_string(),
+                    args: vec![json!({"did": "did:plc:member", "read": false, "write": true})],
+                },
+            })
+        };
+
+        let set = call_named("set_member").unwrap_err();
+        let put = call_named("put_member").unwrap_err();
+        assert_eq!(put.code, set.code);
+        assert_eq!(put.message, set.message);
+        assert_ne!(put.code, "UNKNOWN_FUNCTION");
+
+        let unknown = call_named("put_memberr").unwrap_err();
+        assert_eq!(unknown.code, "UNKNOWN_FUNCTION");
     }
 
     #[test]
