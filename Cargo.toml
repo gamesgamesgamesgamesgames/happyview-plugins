@@ -36,13 +36,6 @@ serde_json = { version = "1", default-features = false, features = ["alloc"] }
 # The SDK is not published; it is pulled from HappyView's `next` branch until it is.
 happyview-plugin-sdk = { git = "https://github.com/gamesgamesgamesgamesgames/happyview", branch = "next" }
 
-# The interpreter ABI this repo's Lua plugin is built against lives in
-# HappyView's working tree and not yet on `next`, the branch above. It comes
-# out when the ABI lands there; until then this path is what resolves, and it
-# resolves only in a checkout laid out beside HappyView's.
-[patch."https://github.com/gamesgamesgamesgamesgames/happyview"]
-happyview-plugin-sdk = { path = "../../atproto/happyview/crates/happyview-plugin-sdk" }
-
 [profile.release]
 opt-level = "s"
 lto = true
