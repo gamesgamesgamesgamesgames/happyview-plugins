@@ -10,7 +10,7 @@ enforcement, LtHash state and commit signing.
 ```lua
 local spaces = require("happyview.spaces")
 
-local space = spaces.create({type = "app.example.thing", skey = "s1"})
+local space = spaces.create({spaceType = "app.example.thing", skey = "s1"})
 local info = spaces.info(space.uri)             -- table, or nil if no such space
 local page = spaces.query({uri = space.uri, limit = 50})
 
@@ -23,7 +23,7 @@ h:is_member("did:plc:abc")                      -- boolean
 
 ## Surface
 
-- `create{type, skey, display_name?, description?, read_policy?, write_policy?, app_access?, config?}` → space
+- `create{spaceType, skey, display_name?, description?, read_policy?, write_policy?, app_access?, config?}` → space
 - `accept_invite{token}` → space
 - `info(uri)` → space, or nil
 - `query{uri, collection?, limit?, cursor?}` → `{records, cursor}`

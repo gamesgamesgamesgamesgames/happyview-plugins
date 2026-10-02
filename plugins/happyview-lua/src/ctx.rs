@@ -46,7 +46,7 @@ pub fn build(lua: &Lua, context: &ExecuteContext) -> LuaResult<Table> {
         table.set("id", space.id.as_str())?;
         table.set("did", space.did.as_str())?;
         table.set("authority_did", space.authority_did.as_str())?;
-        table.set("type_nsid", space.type_nsid.as_str())?;
+        table.set("spaceType", space.type_nsid.as_str())?;
         table.set("skey", space.skey.as_str())?;
         ctx.set("space", table)?;
     }
@@ -144,7 +144,7 @@ mod tests {
             "delegate_did": "did:plc:delegate",
             "space": {
                 "uri": "at://s", "id": "sid", "did": "did:plc:a",
-                "authority_did": "did:plc:auth", "type_nsid": "t", "skey": "k",
+                "authority_did": "did:plc:auth", "spaceType": "t", "skey": "k",
             },
         }));
         assert_eq!(
@@ -152,9 +152,10 @@ mod tests {
                 &lua,
                 r#"return ctx.caller_did .. "|" .. tostring(ctx.has_pds_auth) .. "|" .. ctx.env.API
                    .. "|" .. ctx.method .. "|" .. ctx.collection .. "|" .. ctx.params.q
-                   .. "|" .. ctx.delegate_did .. "|" .. ctx.space.authority_did"#
+                   .. "|" .. ctx.delegate_did .. "|" .. ctx.space.authority_did
+                   .. "|" .. ctx.space.spaceType"#
             ),
-            "did:plc:me|true|k|app.test.p|app.test.rec|x|did:plc:delegate|did:plc:auth"
+            "did:plc:me|true|k|app.test.p|app.test.rec|x|did:plc:delegate|did:plc:auth|t"
         );
     }
 

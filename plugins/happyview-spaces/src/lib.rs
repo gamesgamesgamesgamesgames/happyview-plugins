@@ -31,8 +31,8 @@ fn surface() -> ApiSurface {
         .export(
             ApiExport::function("create")
                 .describe("Create a space")
-                .param_json(json!({"name": "opts", "type": "object", "description": "type, skey and optional fields", "properties": [
-                    {"name": "type", "type": "string"},
+                .param_json(json!({"name": "opts", "type": "object", "description": "spaceType, skey and optional fields", "properties": [
+                    {"name": "spaceType", "type": "string"},
                     {"name": "skey", "type": "string"},
                     {"name": "display_name", "type": "string?"},
                     {"name": "description", "type": "string?"},
@@ -96,7 +96,7 @@ fn space_shape() -> Value {
         {"name": "did", "type": "string"},
         {"name": "authority_did", "type": "string"},
         {"name": "creator_did", "type": "string"},
-        {"name": "type", "type": "string"},
+        {"name": "spaceType", "type": "string"},
         {"name": "skey", "type": "string"},
         {"name": "display_name", "type": "string?"},
         {"name": "description", "type": "string?"},
@@ -141,7 +141,7 @@ fn dispatch(function: &str, args: &[Value], _ctx: &CallContext) -> Result<Value,
 
 fn create(args: &[Value]) -> Result<Value, PluginError> {
     let table = table_arg(args, 0)?;
-    let type_nsid = required_str_field(table, "type")?;
+    let type_nsid = required_str_field(table, "spaceType")?;
     let skey = required_str_field(table, "skey")?;
     let display_name = optional_str_field(table, "display_name");
     let description = optional_str_field(table, "description");
@@ -413,7 +413,7 @@ fn space_value(space: SpaceInfo) -> Value {
         "did": space.did,
         "authority_did": space.authority_did,
         "creator_did": space.creator_did,
-        "type": space.type_nsid,
+        "spaceType": space.type_nsid,
         "skey": space.skey,
         "display_name": space.display_name,
         "description": space.description,
@@ -773,6 +773,49 @@ mod tests {
 
         let unchanged = update_spec("at://did:plc:abc/space/x/y", &[json!({})]).unwrap();
         assert_eq!(unchanged.display_name, Patch::Unchanged);
+    }
+
+    /// A space's type is `spaceType` everywhere a script meets it: the
+    /// parameter `create` reads, the field a space carries back, and the
+    /// surface that documents both.
+    #[test]
+    fn a_space_type_is_named_spacetype_on_every_surface() {
+        let space = space_value(SpaceInfo {
+            uri: "at://did:plc:abc/space/app.example.thing/s1".to_string(),
+            id: "space-1".to_string(),
+            did: "did:plc:abc".to_string(),
+            authority_did: "did:plc:abc".to_string(),
+            creator_did: "did:plc:abc".to_string(),
+            type_nsid: "app.example.thing".to_string(),
+            skey: "s1".to_string(),
+            display_name: None,
+            description: None,
+            read_policy: json!({}),
+            write_policy: json!({}),
+            app_access: json!({}),
+            config: json!({}),
+            revision: None,
+            created_at: "2026-10-02T00:00:00Z".to_string(),
+            updated_at: "2026-10-02T00:00:00Z".to_string(),
+        });
+        assert_eq!(space["spaceType"], json!("app.example.thing"));
+        assert_eq!(space.get("type"), None);
+
+        let create = surface()
+            .exports
+            .into_iter()
+            .find(|export| export.name == "create")
+            .expect("create export");
+        let properties = create.params[0]["properties"]
+            .as_array()
+            .expect("create's opts properties")
+            .clone();
+        let names: Vec<&str> = properties
+            .iter()
+            .filter_map(|property| property["name"].as_str())
+            .collect();
+        assert!(names.contains(&"spaceType"), "{names:?}");
+        assert!(!names.contains(&"type"), "{names:?}");
     }
 
     #[test]

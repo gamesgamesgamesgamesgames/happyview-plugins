@@ -50,7 +50,7 @@ read alike in Lua, but the distinction is real on the wire.
 | job | `job` |
 
 A space-scoped query or procedure also carries
-`space = {uri, id, did, authority_did, type_nsid, skey}`.
+`space = {uri, id, did, authority_did, spaceType, skey}`.
 
 `ctx.env` is the instance's script variables, flat. Read-only by convention
 rather than by enforcement.
