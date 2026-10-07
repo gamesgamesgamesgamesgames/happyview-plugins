@@ -2,9 +2,9 @@ name: Release
 
 on:
   push:
-    branches: [main, beta, alpha]
+    branches: [main]
   pull_request:
-    branches: [main, beta, alpha]
+    branches: [main]
 
 env:
   WASI_SDK_VERSION: "34.0"
@@ -100,9 +100,7 @@ jobs:
           cargo test -j 2 -p happyview-lua --test module_interface
 
   release:
-    # main publishes releases; beta and alpha publish prereleases of the same
-    # plugins (`1.0.0-alpha.1`), for the HappyView line each branch builds against.
-    if: github.event_name == 'push' && contains(fromJSON('["refs/heads/main", "refs/heads/beta", "refs/heads/alpha"]'), github.ref)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [build, interpreter]
     runs-on: depot-ubuntu-24.04
     permissions:
